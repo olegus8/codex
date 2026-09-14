@@ -35,6 +35,14 @@ export type Usage = {
 export type TurnCompletedEvent = {
   type: "turn.completed";
   usage: Usage;
+  context_pause?: ContextPause;
+};
+
+/** Context pause awaiting explicit user input. */
+export type ContextPause = {
+  used_tokens: number;
+  context_window: number;
+  threshold_percent: number;
 };
 
 /** Indicates that a turn failed with an error. */

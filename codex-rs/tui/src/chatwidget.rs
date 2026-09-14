@@ -323,6 +323,7 @@ mod command_lifecycle;
 mod connector_mentions;
 mod connectors;
 mod constructor;
+mod context_policy;
 pub(crate) use self::connectors::ConnectorScopeGeneration;
 use self::connectors::ConnectorsState;
 mod exec_state;
@@ -955,6 +956,7 @@ fn request_permissions_from_params(
 
 fn token_usage_info_from_app_server(token_usage: ThreadTokenUsage) -> TokenUsageInfo {
     TokenUsageInfo {
+        context_window_usage: token_usage.context_window_usage,
         total_token_usage: TokenUsage {
             total_tokens: token_usage.total.total_tokens,
             input_tokens: token_usage.total.input_tokens,
@@ -1163,10 +1165,7 @@ impl ChatWidget {
     }
 
     fn context_remaining_percent(&self, info: &TokenUsageInfo) -> Option<i64> {
-        info.model_context_window.map(|window| {
-            info.last_token_usage
-                .percent_of_context_window_remaining(window)
-        })
+        info.context_remaining_percent()
     }
 
     fn context_used_tokens(&self, info: &TokenUsageInfo, percent_known: bool) -> Option<i64> {

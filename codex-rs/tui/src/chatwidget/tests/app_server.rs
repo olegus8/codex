@@ -126,6 +126,7 @@ fn start_safety_buffering_test_turn(
         ServerNotification::TurnStarted(TurnStartedNotification {
             thread_id: thread_id.to_string(),
             turn: AppServerTurn {
+                context_pause: None,
                 id: turn_id.to_string(),
                 items_view: codex_app_server_protocol::TurnItemsView::Full,
                 items: Vec::new(),
@@ -765,6 +766,7 @@ async fn live_app_server_turn_completed_clears_working_status_after_answer_item(
         ServerNotification::TurnStarted(TurnStartedNotification {
             thread_id: "thread-1".to_string(),
             turn: AppServerTurn {
+                context_pause: None,
                 id: "turn-1".to_string(),
                 items_view: codex_app_server_protocol::TurnItemsView::Full,
                 items: Vec::new(),
@@ -812,6 +814,7 @@ async fn live_app_server_turn_completed_clears_working_status_after_answer_item(
         ServerNotification::TurnCompleted(TurnCompletedNotification {
             thread_id: "thread-1".to_string(),
             turn: AppServerTurn {
+                context_pause: None,
                 id: "turn-1".to_string(),
                 items_view: codex_app_server_protocol::TurnItemsView::Summary,
                 items: vec![item],
@@ -846,6 +849,7 @@ async fn live_app_server_turn_started_sets_feedback_turn_id() {
         ServerNotification::TurnStarted(TurnStartedNotification {
             thread_id: "thread-1".to_string(),
             turn: AppServerTurn {
+                context_pause: None,
                 id: "turn-1".to_string(),
                 items_view: codex_app_server_protocol::TurnItemsView::Full,
                 items: Vec::new(),
@@ -1384,6 +1388,7 @@ async fn live_app_server_failed_turn_does_not_duplicate_error_history() {
         ServerNotification::TurnStarted(TurnStartedNotification {
             thread_id: "thread-1".to_string(),
             turn: AppServerTurn {
+                context_pause: None,
                 id: "turn-1".to_string(),
                 items_view: codex_app_server_protocol::TurnItemsView::Full,
                 items: Vec::new(),
@@ -1419,6 +1424,7 @@ async fn live_app_server_failed_turn_does_not_duplicate_error_history() {
         ServerNotification::TurnCompleted(TurnCompletedNotification {
             thread_id: "thread-1".to_string(),
             turn: AppServerTurn {
+                context_pause: None,
                 id: "turn-1".to_string(),
                 items_view: codex_app_server_protocol::TurnItemsView::Full,
                 items: Vec::new(),
@@ -1543,6 +1549,7 @@ async fn live_app_server_stream_recovery_restores_previous_status_header() {
         ServerNotification::TurnStarted(TurnStartedNotification {
             thread_id: "thread-1".to_string(),
             turn: AppServerTurn {
+                context_pause: None,
                 id: "turn-1".to_string(),
                 items_view: codex_app_server_protocol::TurnItemsView::Full,
                 items: Vec::new(),
@@ -1620,6 +1627,7 @@ async fn live_app_server_server_overloaded_error_renders_warning() {
         ServerNotification::TurnStarted(TurnStartedNotification {
             thread_id: "thread-1".to_string(),
             turn: AppServerTurn {
+                context_pause: None,
                 id: "turn-1".to_string(),
                 items_view: codex_app_server_protocol::TurnItemsView::Full,
                 items: Vec::new(),
@@ -1663,6 +1671,7 @@ async fn live_app_server_cyber_policy_error_renders_dedicated_notice() {
         ServerNotification::TurnStarted(TurnStartedNotification {
             thread_id: "thread-1".to_string(),
             turn: AppServerTurn {
+                context_pause: None,
                 id: "turn-1".to_string(),
                 items_view: codex_app_server_protocol::TurnItemsView::Full,
                 items: Vec::new(),

@@ -1,6 +1,8 @@
 use super::ActivePermissionProfile;
 use super::ApprovalsReviewer;
 use super::AskForApproval;
+use super::ContextPause;
+use super::ContextWindowUsage;
 use super::SandboxMode;
 use super::SandboxPolicy;
 use super::Thread;
@@ -1805,6 +1807,9 @@ pub enum ThreadTimelineEntry {
         started_at: Option<i64>,
     },
     TurnCompleted {
+        #[serde(default, rename = "contextPause")]
+        #[ts(rename = "contextPause")]
+        context_pause: Option<ContextPause>,
         #[ts(type = "number")]
         position: u64,
         #[ts(rename = "turnId")]
@@ -1874,6 +1879,8 @@ impl From<codex_protocol::ResponseUsageMetadata> for ResponseUsageMetadata {
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/")]
 pub struct ThreadTokenUsage {
+    #[serde(default)]
+    pub context_window_usage: Option<ContextWindowUsage>,
     pub total: TokenUsageBreakdown,
     pub last: TokenUsageBreakdown,
     // TODO(aibrahim): make this not optional
@@ -1884,6 +1891,10 @@ pub struct ThreadTokenUsage {
 impl From<CoreTokenUsageInfo> for ThreadTokenUsage {
     fn from(value: CoreTokenUsageInfo) -> Self {
         Self {
+            context_window_usage: value.context_window_usage.map(|usage| ContextWindowUsage {
+                used_tokens: usage.used_tokens,
+                context_window: usage.context_window,
+            }),
             total: value.total_token_usage.into(),
             last: value.last_token_usage.into(),
             model_context_window: value.model_context_window,

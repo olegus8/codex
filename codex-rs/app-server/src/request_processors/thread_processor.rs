@@ -5829,6 +5829,7 @@ fn stored_turn_to_api_turn(
         .map(deserialize_stored_thread_item)
         .collect::<Result<Vec<_>, _>>()?;
     Ok(Turn {
+        context_pause: turn.context_pause,
         id: turn.turn_id,
         items,
         items_view,

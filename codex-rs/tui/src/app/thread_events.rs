@@ -686,6 +686,7 @@ mod tests {
 
     fn test_turn(turn_id: &str, status: TurnStatus, items: Vec<ThreadItem>) -> Turn {
         Turn {
+            context_pause: None,
             id: turn_id.to_string(),
             items_view: codex_app_server_protocol::TurnItemsView::Full,
             items,

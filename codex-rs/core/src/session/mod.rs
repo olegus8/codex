@@ -4690,6 +4690,7 @@ impl Session {
         {
             let mut state = self.state.lock().await;
             let mut info = state.token_info().unwrap_or(TokenUsageInfo {
+                context_window_usage: None,
                 total_token_usage: TokenUsage::default(),
                 last_token_usage: TokenUsage::default(),
                 model_context_window: None,
@@ -4754,6 +4755,13 @@ impl Session {
     }
 
     pub(crate) async fn send_token_count_event(&self, turn_context: &TurnContext) {
+        if !context_window::automatic_compaction_enabled(turn_context) {
+            let status = context_window::context_window_token_status(self, turn_context).await;
+            if status.full_context_window_limit.is_some() {
+                context_window::publish_usage(self, turn_context, &status).await;
+                return;
+            }
+        }
         let (info, rate_limits) = {
             let state = self.state.lock().await;
             state.token_info_and_rate_limits()
@@ -4766,6 +4774,12 @@ impl Session {
         if let Some(context_window) = turn_context.model_context_window() {
             let mut state = self.state.lock().await;
             state.set_token_usage_full(context_window);
+            if !context_window::automatic_compaction_enabled(turn_context)
+                && let Some(mut info) = state.token_info()
+            {
+                info.last_token_usage.total_tokens = context_window;
+                state.set_token_info(Some(info));
+            }
         }
         self.send_token_count_event(turn_context).await;
     }

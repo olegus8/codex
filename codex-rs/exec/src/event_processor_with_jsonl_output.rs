@@ -524,6 +524,7 @@ impl EventProcessorWithJsonOutput {
                         }
                         self.emit_final_message_on_shutdown = true;
                         events.push(ThreadEvent::TurnCompleted(TurnCompletedEvent {
+                            context_pause: notification.turn.context_pause.map(Into::into),
                             usage: self.usage_from_last_total(),
                         }));
                         CodexStatus::InitiateShutdown

@@ -1139,6 +1139,23 @@ class ContextCompactedNotification(BaseModel):
     turn_id: Annotated[str, Field(alias="turnId")]
 
 
+class ContextPause(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+    context_window: Annotated[int, Field(alias="contextWindow")]
+    threshold_percent: Annotated[int, Field(alias="thresholdPercent", ge=0)]
+    used_tokens: Annotated[int, Field(alias="usedTokens")]
+
+
+class ContextWindowUsage(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+    context_window: Annotated[int, Field(alias="contextWindow")]
+    used_tokens: Annotated[int, Field(alias="usedTokens")]
+
+
 class ConversationTextRole(Enum):
     user = "user"
     developer = "developer"
@@ -9947,6 +9964,9 @@ class ThreadTokenUsage(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
     )
+    context_window_usage: Annotated[
+        ContextWindowUsage | None, Field(alias="contextWindowUsage")
+    ] = None
     last: TokenUsageBreakdown
     model_context_window: Annotated[int | None, Field(alias="modelContextWindow")] = None
     total: TokenUsageBreakdown
@@ -11119,6 +11139,7 @@ class TurnCompletedThreadTimelineEntry(BaseModel):
         populate_by_name=True,
     )
     completed_at: int | None = None
+    context_pause: Annotated[ContextPause | None, Field(alias="contextPause")] = None
     duration_ms: int | None = None
     error: TurnError | None = None
     position: Annotated[int, Field(ge=0)]
@@ -11158,6 +11179,7 @@ class Turn(BaseModel):
             alias="completedAt", description="Unix timestamp (in seconds) when the turn completed."
         ),
     ] = None
+    context_pause: Annotated[ContextPause | None, Field(alias="contextPause")] = None
     duration_ms: Annotated[
         int | None,
         Field(

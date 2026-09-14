@@ -48,12 +48,34 @@ pub struct TurnStartedEvent {}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 pub struct TurnCompletedEvent {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub context_pause: Option<ContextPause>,
     pub usage: Usage,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 pub struct TurnFailedEvent {
     pub error: ThreadErrorEvent,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
+pub struct ContextPause {
+    #[ts(type = "number")]
+    pub used_tokens: i64,
+    #[ts(type = "number")]
+    pub context_window: i64,
+    pub threshold_percent: u8,
+}
+
+impl From<codex_app_server_protocol::ContextPause> for ContextPause {
+    fn from(value: codex_app_server_protocol::ContextPause) -> Self {
+        Self {
+            used_tokens: value.used_tokens,
+            context_window: value.context_window,
+            threshold_percent: value.threshold_percent,
+        }
+    }
 }
 
 /// Describes the usage of tokens during a turn.

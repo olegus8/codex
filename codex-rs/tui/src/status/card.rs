@@ -368,6 +368,16 @@ impl StatusHistoryCell {
             tokens_in_context: context_usage.tokens_in_context_window(),
             window,
         });
+        let context_window = token_info
+            .and_then(|info| {
+                let usage = info.context_window_usage.as_ref()?;
+                Some(StatusContextWindowData {
+                    percent_remaining: info.context_remaining_percent()?,
+                    tokens_in_context: usage.used_tokens,
+                    window: info.context_window_size()?,
+                })
+            })
+            .or(context_window);
 
         let token_usage = StatusTokenUsageData {
             total: total_usage.blended_total(),

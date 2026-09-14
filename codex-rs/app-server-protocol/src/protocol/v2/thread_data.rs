@@ -1,4 +1,5 @@
 use super::CodexErrorInfo;
+use super::ContextPause;
 use super::ThreadEnvironment;
 use super::ThreadItem;
 use super::ThreadStatus;
@@ -384,6 +385,8 @@ impl<'de> Deserialize<'de> for Thread {
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/")]
 pub struct Turn {
+    #[serde(default)]
+    pub context_pause: Option<ContextPause>,
     /// Identifier for this turn. Codex-generated turn IDs are UUIDv7.
     pub id: String,
     /// Thread items currently included in this turn payload.

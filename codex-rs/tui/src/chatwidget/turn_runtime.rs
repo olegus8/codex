@@ -74,6 +74,7 @@ impl ChatWidget {
     // Raw reasoning uses the same flow as summarized reasoning
 
     pub(super) fn on_task_started(&mut self) {
+        self.input_queue.context_input_required = false;
         self.clear_context_compaction();
         self.input_queue.user_turn_pending_start = false;
         self.reset_safety_buffering_for_turn_start();
@@ -201,7 +202,11 @@ impl ChatWidget {
         let had_pending_steers = !self.input_queue.pending_steers.is_empty();
         self.refresh_pending_input_preview();
 
-        if !from_replay && !self.has_queued_follow_up_messages() && !had_pending_steers {
+        if !from_replay
+            && !self.input_queue.context_input_required
+            && !self.has_queued_follow_up_messages()
+            && !had_pending_steers
+        {
             self.maybe_prompt_plan_implementation();
         }
         // Keep this flag for replayed completion events so a subsequent live TurnComplete can
@@ -477,6 +482,22 @@ impl ChatWidget {
         message: String,
         codex_error_info: Option<AppServerCodexErrorInfo>,
     ) {
+        if codex_error_info == Some(AppServerCodexErrorInfo::ContextWindowExceeded)
+            && self
+                .token_info
+                .as_ref()
+                .is_some_and(|info| info.context_window_usage.is_some())
+        {
+            self.input_queue.context_input_required = true;
+            self.on_error(
+                concat!(
+                    "Context exhausted. History is preserved. ",
+                    "Start a new session to continue.",
+                )
+                .into(),
+            );
+            return;
+        }
         if codex_error_info == Some(AppServerCodexErrorInfo::MisalignmentPolicyViolation) {
             self.on_misalignment_policy_violation();
         } else if codex_error_info

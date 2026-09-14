@@ -50,6 +50,7 @@ pub(super) struct RolloutHistoryPosition {
 }
 
 pub(super) struct StoredTurnRow {
+    pub context_pause: Option<codex_app_server_protocol::ContextPause>,
     pub position: RolloutHistoryPosition,
     pub turn_id: String,
     pub status: StoredTurnStatus,
@@ -132,6 +133,7 @@ pub(in crate::local) async fn list_turns(
             StoredTurnItemsView::Summary => turn.summary_items,
         };
         turns.push(StoredTurn {
+            context_pause: turn.context_pause,
             turn_id: turn.turn_id,
             items,
             items_view: params.items_view,
@@ -298,6 +300,12 @@ pub(super) fn stored_turn_row(row: sqlx::sqlite::SqliteRow) -> ThreadStoreResult
         .transpose()
         .map_err(super::thread_history_error)?;
     Ok(StoredTurnRow {
+        context_pause: row
+            .try_get::<Option<String>, _>("context_pause_json")?
+            .as_deref()
+            .map(serde_json::from_str)
+            .transpose()
+            .map_err(super::thread_history_error)?,
         position: RolloutHistoryPosition {
             rollout_ordinal: row.try_get("rollout_ordinal")?,
         },

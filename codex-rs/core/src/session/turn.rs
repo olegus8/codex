@@ -516,6 +516,7 @@ pub(crate) async fn run_turn(
                     &step_context.settings.model_info,
                 )
                 .await;
+                super::context_window::publish_usage(&sess, &turn_context, &status).await;
                 if status.full_context_window_limit_reached {
                     return Err(CodexErr::ContextWindowExceeded);
                 }
@@ -582,6 +583,7 @@ pub(crate) async fn run_turn(
                 .instrument(trace_span!("run_turn.collect_post_sampling_state"))
                 .await;
                 let needs_follow_up = model_needs_follow_up || has_pending_input;
+                super::context_window::publish_usage(&sess, &turn_context, &token_status).await;
                 if super::context_pause::maybe_pause(&sess, &turn_context, &token_status).await {
                     last_agent_message = sampling_request_last_agent_message;
                     break;

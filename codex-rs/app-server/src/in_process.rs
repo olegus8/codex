@@ -1012,6 +1012,7 @@ mod tests {
             &ServerNotification::TurnCompleted(TurnCompletedNotification {
                 thread_id: "thread-1".to_string(),
                 turn: Turn {
+                    context_pause: None,
                     id: "turn-1".to_string(),
                     items: Vec::new(),
                     items_view: TurnItemsView::NotLoaded,
