@@ -33,7 +33,11 @@ def tool(call_id, transport, text):
             "id": call_id,
             "call_id": call_id,
             "name": "exec",
-            "input": "text(await tools." + name + "(" + json.dumps(args) + "));",
+            "input": "text(await tools."
+            + name
+            + "("
+            + json.dumps(args)
+            + "));",
         }
     return {
         "type": "function_call",
@@ -53,19 +57,24 @@ def retained(request, call_id, text):
         item
         for item in inputs(request)
         if item.get("call_id") == call_id
-        and item["type"] in ("function_call_output", "custom_tool_call_output")
+        and item["type"]
+        in ("function_call_output", "custom_tool_call_output")
     ]
     assert len(outputs) == 1, (call_id, outputs)
     assert text in json.dumps(outputs[0]), outputs[0]
 
 
 def history_request(records):
-    items = [row["payload"] for row in records if row["type"] == "response_item"]
+    items = [
+        row["payload"] for row in records if row["type"] == "response_item"
+    ]
     return {"body": {"input": items}}
 
 
 class Scenario:
-    def __init__(self, args, name, transport="direct", hooks="native", auto=False):
+    def __init__(
+        self, args, name, transport="direct", hooks="native", auto=False
+    ):
         self.directory = args.out / name
         self.directory.mkdir(parents=True)
         self.fixture = Responses(self.directory)
@@ -81,7 +90,11 @@ class Scenario:
         )
         temporary = self.directory / "temp"
         temporary.mkdir()
-        self.env = {**os.environ, "CODEX_HOME": str(home), "TMPDIR": str(temporary)}
+        self.env = {
+            **os.environ,
+            "CODEX_HOME": str(home),
+            "TMPDIR": str(temporary),
+        }
         options = {
             "model": "gpt-6-astra",
             "model_provider": "fixture",
@@ -117,7 +130,6 @@ class Scenario:
         config.mkdir()
         shutil.copyfile(args.hook, config / "session.py")
         requirements = args.requirements.read_text()
-        # The candidate retires only the two obsolete context hooks.
         for event in ("PreCompact", "PostToolUse"):
             start = requirements.index("[[hooks." + event + "]]")
             end = requirements.find("\n[[hooks.", start + 1)
@@ -147,17 +159,27 @@ class Scenario:
         for path in sorted(Path("/etc").iterdir()):
             if path.name != "codex" and path.exists():
                 self.prefix += ["--ro-bind", str(path), str(path)]
-        self.prefix += ["--ro-bind", str(config), "/etc/codex", "--", str(args.binary)]
+        self.prefix += [
+            "--ro-bind",
+            str(config),
+            "/etc/codex",
+            "--",
+            str(args.binary),
+        ]
         self.options = [
             arg
             for key, value in options.items()
             for arg in ("-c", key + "=" + json.dumps(value))
         ]
-        (self.directory / "options.json").write_text(json.dumps(options, indent=2))
+        (self.directory / "options.json").write_text(
+            json.dumps(options, indent=2)
+        )
 
     def start(self, resume=None):
         self.app = App(
-            self.prefix + ["app-server"] + self.options, self.directory, self.env
+            self.prefix + ["app-server"] + self.options,
+            self.directory,
+            self.env,
         )
         requirements = self.app.request("configRequirements/read", {})
         hooks = requirements["requirements"]["hooks"]
@@ -247,7 +269,10 @@ def lifecycle(case):
     saved = case.app.request(
         "thread/read", {"threadId": case.thread, "includeTurns": True}
     )
-    assert sum(bool(t.get("contextPause")) for t in saved["thread"]["turns"]) == 1
+    assert (
+        sum(bool(t.get("contextPause")) for t in saved["thread"]["turns"])
+        == 1
+    )
     case.app.close()
     case.start(resume=case.thread)
     fixture.add(tool("ordinary", case.transport, "ORDINARY_TOOL"), 140000)
@@ -270,7 +295,9 @@ def lifecycle(case):
     assert "Keep this submitted input" in json.dumps(records)
     for request in fixture.requests:
         assert request["path"] == "/responses", request["path"]
-        assert not any(item["type"] == "compaction" for item in inputs(request))
+        assert not any(
+            item["type"] == "compaction" for item in inputs(request)
+        )
 
 
 def overflow(case):
@@ -308,13 +335,19 @@ def independent(case):
         case.app = None
     records = case.history()
     assert (
-        sum(bool(row.get("payload", {}).get("context_pause")) for row in records) == 2
+        sum(
+            bool(row.get("payload", {}).get("context_pause"))
+            for row in records
+        )
+        == 2
     )
 
 
 def compaction(case, *, manual):
     case.start()
-    case.fixture.add(message("BEFORE_COMPACT"), 185000 if not manual else 2000)
+    case.fixture.add(
+        message("BEFORE_COMPACT"), 185000 if not manual else 2000
+    )
     case.turn("Before compaction", 1)
     case.fixture.add(message("REQUESTED_SUMMARY"), 1000)
     if manual:
@@ -401,7 +434,11 @@ def main():
             [
                 ("independent-" + hooks, independent, {"hooks": hooks}),
                 ("overflow-" + hooks, overflow, {"hooks": hooks}),
-                ("large-" + hooks, large_result, {"hooks": hooks, "transport": "mcp"}),
+                (
+                    "large-" + hooks,
+                    large_result,
+                    {"hooks": hooks, "transport": "mcp"},
+                ),
                 ("guard-" + hooks, guard, {"hooks": hooks}),
                 (
                     "manual-" + hooks,

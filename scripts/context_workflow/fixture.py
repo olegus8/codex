@@ -31,7 +31,9 @@ class Responses:
                 pass
 
             def do_POST(self):
-                body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+                body = json.loads(
+                    self.rfile.read(int(self.headers["Content-Length"]))
+                )
                 title = set(
                     body.get("text", {})
                     .get("format", {})
@@ -83,7 +85,11 @@ class Responses:
                         {"type": "response.completed", "response": response},
                     ]
                 data = "".join(
-                    "event: " + event["type"] + "\ndata: " + json.dumps(event) + "\n\n"
+                    "event: "
+                    + event["type"]
+                    + "\ndata: "
+                    + json.dumps(event)
+                    + "\n\n"
                     for event in events
                 ).encode()
                 self.send_response(200)
@@ -92,8 +98,12 @@ class Responses:
                 self.end_headers()
                 self.wfile.write(data)
 
-        self.server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+        self.server = http.server.ThreadingHTTPServer(
+            ("127.0.0.1", 0), Handler
+        )
+        threading.Thread(
+            target=self.server.serve_forever, daemon=True
+        ).start()
 
     def save(self):
         (self.directory / "requests.json").write_text(
@@ -171,9 +181,9 @@ class App:
             "turn/start",
             {"threadId": thread, "input": [{"type": "text", "text": prompt}]},
         )
-        return self.until(lambda value: value.get("method") == "turn/completed")[
-            "params"
-        ]["turn"]
+        return self.until(
+            lambda value: value.get("method") == "turn/completed"
+        )["params"]["turn"]
 
     def close(self):
         self.process.stdin.close()
@@ -212,13 +222,19 @@ def mcp_server(stream, output):
         elif method == "tools/call":
             result = {
                 "content": [
-                    {"type": "text", "text": request["params"]["arguments"]["text"]}
+                    {
+                        "type": "text",
+                        "text": request["params"]["arguments"]["text"],
+                    }
                 ]
             }
         else:
             result = {}
         output.write(
-            json.dumps({"jsonrpc": "2.0", "id": request["id"], "result": result}) + "\n"
+            json.dumps(
+                {"jsonrpc": "2.0", "id": request["id"], "result": result}
+            )
+            + "\n"
         )
         output.flush()
 

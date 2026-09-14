@@ -57,7 +57,11 @@ def terminal(case):
     pending = b""
     stages = [
         (b"BELOW_DONE", b"Cross the threshold\r", 2),
-        (b"Paused at the 70% context threshold", b"Continue ordinary work\r", 3),
+        (
+            b"Paused at the 70% context threshold",
+            b"Continue ordinary work\r",
+            3,
+        ),
         (b"ORDINARY_DONE", b"Write a handoff\r", 5),
         (b"HANDOFF_DONE", b"Reach exhaustion\r", 7),
         (b"Context exhausted. History is preserved.", b"\x04", 8),
@@ -109,10 +113,15 @@ def terminal(case):
         assert process.returncode == 0, process.returncode
         assert stage == len(stages), stage
         for index, call_id in ((1, "below"), (3, "pause"), (5, "ordinary")):
-            retained(fixture.requests[index], call_id, call_id.upper() + "_TOOL")
+            retained(
+                fixture.requests[index], call_id, call_id.upper() + "_TOOL"
+            )
         records = case.history()
         assert (
-            sum(bool(row.get("payload", {}).get("context_pause")) for row in records)
+            sum(
+                bool(row.get("payload", {}).get("context_pause"))
+                for row in records
+            )
             == 1
         )
         retained(history_request(records), "full", "FULL_TOOL")
