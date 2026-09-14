@@ -444,7 +444,7 @@ async fn no_auto_compact_refuses_model_requested_reset() -> Result<()> {
     let request = continuation.single_request();
     assert_eq!(
         request.function_call_output_text("reset").as_deref(),
-        Some("Automatic context resets are disabled for this session.")
+        Some("Automatic context resets are disabled.")
     );
     assert!(
         request

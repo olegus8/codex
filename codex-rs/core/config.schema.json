@@ -6894,7 +6894,7 @@
       "type": "string"
     },
     "model_auto_compact_enabled": {
-      "description": "Allow automatic compaction (default: true). When false, stop at the usable context limit without rewriting history. Manual compaction and internal safety reviews are unchanged.",
+      "description": "Defaults to true. When false, preserve history and stop at the usable context limit. Manual compaction and safety reviews ignore this setting.",
       "type": "boolean"
     },
     "model_auto_compact_token_limit": {

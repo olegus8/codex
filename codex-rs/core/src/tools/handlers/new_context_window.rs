@@ -38,7 +38,7 @@ impl ToolExecutor<ToolInvocation> for NewContextWindowHandler {
 
             if !automatic_compaction_enabled(&invocation.turn) {
                 return Err(FunctionCallError::RespondToModel(
-                    "Automatic context resets are disabled for this session.".to_string(),
+                    "Automatic context resets are disabled.".to_string(),
                 ));
             }
 

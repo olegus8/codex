@@ -620,7 +620,6 @@ pub struct Config {
     /// Size of the context window for the model, in tokens.
     pub model_context_window: Option<i64>,
 
-    /// Allow automatic compaction outside internal safety reviews.
     pub model_auto_compact_enabled: bool,
 
     /// Token usage threshold triggering auto-compaction of conversation history.
