@@ -165,6 +165,10 @@ pub struct ConfigToml {
     /// Size of the context window for the model, in tokens.
     pub model_context_window: Option<i64>,
 
+    /// Defaults to true. When false, preserve history and stop at the usable
+    /// context limit. Manual compaction and safety reviews ignore this setting.
+    pub model_auto_compact_enabled: Option<bool>,
+
     /// Token usage threshold triggering auto-compaction of conversation history.
     pub model_auto_compact_token_limit: Option<i64>,
 

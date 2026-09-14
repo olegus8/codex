@@ -6893,6 +6893,10 @@
       "description": "Optional override of model selection.",
       "type": "string"
     },
+    "model_auto_compact_enabled": {
+      "description": "Defaults to true. When false, preserve history and stop at the usable context limit. Manual compaction and safety reviews ignore this setting.",
+      "type": "boolean"
+    },
     "model_auto_compact_token_limit": {
       "description": "Token usage threshold triggering auto-compaction of conversation history.",
       "format": "int64",
