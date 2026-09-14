@@ -35,6 +35,7 @@ use crate::responses_retry::ResponsesStreamRetryState;
 use crate::responses_retry::handle_retryable_response_stream_error;
 use crate::session::PreviousTurnSettings;
 use crate::session::TurnInput;
+use crate::session::context_window::automatic_compaction_enabled;
 use crate::session::session::Session;
 use crate::session::step_context::StepContext;
 use crate::session::turn_context::TurnContext;
@@ -507,6 +508,19 @@ pub(crate) async fn run_turn(
             sess.record_reasoning_effort_override(step_context.as_ref())
                 .await;
 
+            if !automatic_compaction_enabled(&turn_context)
+                && super::context_window::context_window_token_status_for_model(
+                    sess.as_ref(),
+                    turn_context.config.as_ref(),
+                    turn_context.as_ref(),
+                    &step_context.settings.model_info,
+                )
+                .await
+                .full_context_window_limit_reached
+            {
+                return Err(CodexErr::ContextWindowExceeded);
+            }
+
             // Construct the input that we will send to the model.
             let sampling_request_input: Vec<ResponseItem> = async {
                 sess.clone_history()
@@ -598,8 +612,11 @@ pub(crate) async fn run_turn(
                 }
 
                 let should_roll_over = needs_follow_up
+                    && automatic_compaction_enabled(&turn_context)
                     && (sess.take_new_context_window_request().await || token_limit_reached);
-                let allow_auto_compact_fallback = !should_roll_over && !token_limit_reached;
+                let allow_auto_compact_fallback = automatic_compaction_enabled(&turn_context)
+                    && !should_roll_over
+                    && !token_limit_reached;
                 super::token_budget::maybe_record(
                     sess.as_ref(),
                     turn_context.as_ref(),
@@ -1234,6 +1251,9 @@ async fn run_pre_sampling_compact(
     client_session: &mut ModelClientSession,
     cancellation_token: &CancellationToken,
 ) -> CodexResult<()> {
+    if !automatic_compaction_enabled(turn_context) {
+        return Ok(());
+    }
     maybe_run_previous_model_inline_compact(sess, turn_context, client_session, cancellation_token)
         .await?;
     let token_status =

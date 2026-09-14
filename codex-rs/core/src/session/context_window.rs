@@ -4,6 +4,11 @@ use crate::config::Config;
 use codex_protocol::config_types::AutoCompactTokenLimitScope;
 use codex_protocol::openai_models::ModelInfo;
 
+pub(crate) fn automatic_compaction_enabled(turn_context: &TurnContext) -> bool {
+    turn_context.config.model_auto_compact_enabled
+        || crate::guardian::is_basic_session_source(&turn_context.session_source)
+}
+
 #[derive(Debug)]
 pub(crate) struct ContextWindowTokenStatus {
     // Full active context usage, independent of the configured auto-compact scope.
@@ -28,6 +33,7 @@ pub(crate) async fn context_window_token_status(
 ) -> ContextWindowTokenStatus {
     context_window_token_status_with_config(
         sess,
+        turn_context,
         turn_context.config.as_ref(),
         turn_context.model_info().as_ref(),
     )
@@ -46,15 +52,29 @@ pub(crate) async fn context_window_token_status_for_model(
         turn_context.use_model_token_budget_defaults,
         model_info,
     );
-    context_window_token_status_with_config(sess, &config, model_info).await
+    context_window_token_status_with_config(sess, turn_context, &config, model_info).await
 }
 
 async fn context_window_token_status_with_config(
     sess: &Session,
+    turn_context: &TurnContext,
     config: &Config,
     model_info: &ModelInfo,
 ) -> ContextWindowTokenStatus {
-    let active_context_tokens = sess.get_total_token_usage().await;
+    let active_context_tokens = if !automatic_compaction_enabled(turn_context)
+        && sess
+            .token_usage_info()
+            .await
+            .is_none_or(|info| info.last_token_usage.total_tokens == 0)
+    {
+        let base_instructions = sess.get_prompt_base_instructions().await;
+        sess.clone_history()
+            .await
+            .estimate_token_count_with_base_instructions(&base_instructions)
+            .unwrap_or(0)
+    } else {
+        sess.get_total_token_usage().await
+    };
 
     // Count either the full active context or only the tokens added after the initial prefix.
     let (auto_compact_scope_tokens, auto_compact_scope_limit, auto_compact_window_prefill_tokens) =

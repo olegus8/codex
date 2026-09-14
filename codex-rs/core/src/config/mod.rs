@@ -620,6 +620,9 @@ pub struct Config {
     /// Size of the context window for the model, in tokens.
     pub model_context_window: Option<i64>,
 
+    /// Allow automatic compaction outside internal safety reviews.
+    pub model_auto_compact_enabled: bool,
+
     /// Token usage threshold triggering auto-compaction of conversation history.
     pub model_auto_compact_token_limit: Option<i64>,
 
@@ -4135,6 +4138,7 @@ impl Config {
             service_tier,
             review_model,
             model_context_window: cfg.model_context_window,
+            model_auto_compact_enabled: cfg.model_auto_compact_enabled.unwrap_or(true),
             model_auto_compact_token_limit: cfg.model_auto_compact_token_limit,
             model_auto_compact_token_limit_scope: cfg
                 .model_auto_compact_token_limit_scope

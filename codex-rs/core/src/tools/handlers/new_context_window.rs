@@ -1,4 +1,5 @@
 use crate::function_tool::FunctionCallError;
+use crate::session::context_window::automatic_compaction_enabled;
 use crate::tools::context::FunctionToolOutput;
 use crate::tools::context::ToolInvocation;
 use crate::tools::context::ToolPayload;
@@ -32,6 +33,12 @@ impl ToolExecutor<ToolInvocation> for NewContextWindowHandler {
             if !matches!(invocation.payload, ToolPayload::Function { .. }) {
                 return Err(FunctionCallError::RespondToModel(
                     "new_context handler received unsupported payload".to_string(),
+                ));
+            }
+
+            if !automatic_compaction_enabled(&invocation.turn) {
+                return Err(FunctionCallError::RespondToModel(
+                    "Automatic context resets are disabled for this session.".to_string(),
                 ));
             }
 
