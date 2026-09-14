@@ -169,6 +169,11 @@ pub struct ConfigToml {
     /// context limit. Manual compaction and safety reviews ignore this setting.
     pub model_auto_compact_enabled: Option<bool>,
 
+    /// Pause once at this percentage (1-99) of usable context when automatic
+    /// compaction is disabled. Unset disables the pause.
+    #[schemars(range(min = 1, max = 99))]
+    pub model_context_pause_percent: Option<u8>,
+
     /// Token usage threshold triggering auto-compaction of conversation history.
     pub model_auto_compact_token_limit: Option<i64>,
 

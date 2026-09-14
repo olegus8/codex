@@ -508,17 +508,20 @@ pub(crate) async fn run_turn(
             sess.record_reasoning_effort_override(step_context.as_ref())
                 .await;
 
-            if !automatic_compaction_enabled(&turn_context)
-                && super::context_window::context_window_token_status_for_model(
+            if !automatic_compaction_enabled(&turn_context) {
+                let status = super::context_window::context_window_token_status_for_model(
                     sess.as_ref(),
                     turn_context.config.as_ref(),
                     turn_context.as_ref(),
                     &step_context.settings.model_info,
                 )
-                .await
-                .full_context_window_limit_reached
-            {
-                return Err(CodexErr::ContextWindowExceeded);
+                .await;
+                if status.full_context_window_limit_reached {
+                    return Err(CodexErr::ContextWindowExceeded);
+                }
+                if super::context_pause::maybe_pause(&sess, &turn_context, &status).await {
+                    return Ok(None);
+                }
             }
 
             // Construct the input that we will send to the model.
@@ -544,10 +547,12 @@ pub(crate) async fn run_turn(
                 cancellation_token.child_token(),
             )
             .await
+            .map(Some)
         }
         .await;
         match sampling_request_result {
-            Ok((sampling_request_output, sampling_request_input)) => {
+            Ok(None) => break,
+            Ok(Some((sampling_request_output, sampling_request_input))) => {
                 guardian_budget_compacted = false;
                 let SamplingRequestResult {
                     needs_follow_up: model_needs_follow_up,
@@ -577,6 +582,10 @@ pub(crate) async fn run_turn(
                 .instrument(trace_span!("run_turn.collect_post_sampling_state"))
                 .await;
                 let needs_follow_up = model_needs_follow_up || has_pending_input;
+                if super::context_pause::maybe_pause(&sess, &turn_context, &token_status).await {
+                    last_agent_message = sampling_request_last_agent_message;
+                    break;
+                }
                 let token_limit_reached = token_status.token_limit_reached;
 
                 trace!(

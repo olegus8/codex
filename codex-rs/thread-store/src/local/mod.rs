@@ -1120,6 +1120,7 @@ mod tests {
                     },
                 )),
                 RolloutItem::EventMsg(EventMsg::TurnComplete(TurnCompleteEvent {
+                    context_pause: None,
                     turn_id: "turn-1".to_string(),
                     started_at: None,
                     last_agent_message: None,

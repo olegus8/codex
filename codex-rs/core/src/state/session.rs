@@ -72,6 +72,7 @@ pub(crate) struct SessionState {
     /// Persisted origin of the session base instructions, when known.
     pub(crate) base_instructions_provenance: Option<BaseInstructionsProvenance>,
     pub(crate) history: ContextManager,
+    pub(crate) context_pause: crate::session::context_pause::ContextPauseState,
     pub(crate) latest_rate_limits: Option<RateLimitSnapshot>,
     pub(crate) latest_token_usage_record: Option<TokenUsageRecord>,
     pub(crate) server_reasoning_included: bool,
@@ -117,6 +118,7 @@ impl SessionState {
             session_configuration,
             base_instructions_provenance: None,
             history,
+            context_pause: Default::default(),
             latest_rate_limits: None,
             latest_token_usage_record: None,
             server_reasoning_included: false,

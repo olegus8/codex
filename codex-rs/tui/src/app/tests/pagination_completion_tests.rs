@@ -89,6 +89,7 @@ async fn older_pagination_completion_footers_follow_answers_without_overlap_dupl
             })
         }));
         events.push(EventMsg::TurnComplete(TurnCompleteEvent {
+            context_pause: None,
             turn_id,
             last_agent_message: Some(format!("{name} answer")),
             error: None,

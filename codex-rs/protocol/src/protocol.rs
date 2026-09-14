@@ -2140,9 +2140,22 @@ pub struct SafetyBufferingEvent {
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]
 pub struct ContextCompactedEvent;
 
+/// A once-per-thread pause measured against the usable context window.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, JsonSchema, TS)]
+pub struct ContextPause {
+    pub thread_id: ThreadId,
+    pub used_tokens: i64,
+    pub context_window: i64,
+    pub threshold_percent: u8,
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]
 pub struct TurnCompleteEvent {
     pub turn_id: String,
+    /// Autonomous processing paused; a later user message may continue the thread.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub context_pause: Option<ContextPause>,
     pub last_agent_message: Option<String>,
     /// Terminal error details when the turn completed unsuccessfully.
     #[serde(default, skip_serializing_if = "Option::is_none")]

@@ -1895,6 +1895,7 @@ mod tests {
                 review_output: None,
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 turn_id: "turn-1".into(),
                 started_at: None,
                 last_agent_message: None,
@@ -1957,6 +1958,7 @@ mod tests {
                 completed_at_ms: 0,
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 turn_id: "turn-1".into(),
                 started_at: None,
                 last_agent_message: None,
@@ -2071,6 +2073,7 @@ mod tests {
                 started_at_ms: 0,
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 turn_id: turn_id.to_string(),
                 started_at: None,
                 last_agent_message: None,
@@ -2126,6 +2129,7 @@ mod tests {
                 completed_at_ms: 1_000,
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 turn_id: turn_id.to_string(),
                 started_at: None,
                 last_agent_message: None,
@@ -2207,6 +2211,7 @@ mod tests {
                 completed_at_ms: 1_000,
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 turn_id: turn_id.to_string(),
                 started_at: None,
                 last_agent_message: None,
@@ -2322,6 +2327,7 @@ mod tests {
                 status: CoreExecCommandStatus::Completed,
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 turn_id: turn_id.to_string(),
                 started_at: None,
                 last_agent_message: None,
@@ -2421,6 +2427,7 @@ mod tests {
                 ..Default::default()
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 turn_id: turn_id.to_string(),
                 started_at: None,
                 last_agent_message: None,
@@ -2523,6 +2530,7 @@ mod tests {
                 saved_path: Some(test_path_buf("/tmp/ig_123.png").abs()),
             })),
             RolloutItem::EventMsg(EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 turn_id: "turn-image".into(),
                 started_at: None,
                 last_agent_message: None,
@@ -2911,6 +2919,7 @@ mod tests {
                 ..Default::default()
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 turn_id: "turn-a".into(),
                 started_at: None,
                 last_agent_message: None,
@@ -3566,6 +3575,7 @@ mod tests {
                 ..Default::default()
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 turn_id: "turn-a".into(),
                 started_at: None,
                 last_agent_message: None,
@@ -3631,6 +3641,7 @@ mod tests {
                 ..Default::default()
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 turn_id: "turn-a".into(),
                 started_at: None,
                 last_agent_message: None,
@@ -3678,6 +3689,7 @@ mod tests {
                 status: CoreExecCommandStatus::Completed,
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 turn_id: "turn-b".into(),
                 started_at: None,
                 last_agent_message: None,
@@ -3739,6 +3751,7 @@ mod tests {
                 ..Default::default()
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 turn_id: "turn-a".into(),
                 started_at: None,
                 last_agent_message: None,
@@ -3786,6 +3799,7 @@ mod tests {
                 status: CoreExecCommandStatus::Completed,
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 turn_id: "turn-b".into(),
                 started_at: None,
                 last_agent_message: None,
@@ -3979,6 +3993,7 @@ mod tests {
                 ..Default::default()
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 turn_id: "turn-a".into(),
                 started_at: None,
                 last_agent_message: None,
@@ -4004,6 +4019,7 @@ mod tests {
                 ..Default::default()
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 turn_id: "turn-a".into(),
                 started_at: None,
                 last_agent_message: None,
@@ -4020,6 +4036,7 @@ mod tests {
                 questions: None,
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 turn_id: "turn-b".into(),
                 started_at: None,
                 last_agent_message: None,
@@ -4077,6 +4094,7 @@ mod tests {
                 ..Default::default()
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 turn_id: "turn-a".into(),
                 started_at: Some(10),
                 last_agent_message: None,
@@ -4165,6 +4183,7 @@ mod tests {
                 ..Default::default()
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 turn_id: "turn-a".into(),
                 started_at: None,
                 last_agent_message: None,
@@ -4242,6 +4261,7 @@ mod tests {
                 latest_token_usage_record: None,
             }),
             RolloutItem::EventMsg(EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 turn_id: "turn-compact".into(),
                 started_at: None,
                 last_agent_message: None,
@@ -4510,6 +4530,7 @@ mod tests {
                 ..Default::default()
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 turn_id: "turn-a".into(),
                 started_at: None,
                 last_agent_message: None,
@@ -4580,6 +4601,7 @@ mod tests {
                 }),
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 turn_id: "turn-a".into(),
                 started_at: None,
                 last_agent_message: None,
@@ -4633,6 +4655,7 @@ mod tests {
                 ..Default::default()
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 turn_id: "turn-a".into(),
                 started_at: Some(10),
                 last_agent_message: None,
@@ -4705,6 +4728,7 @@ mod tests {
             })),
             RolloutItem::ResponseItem(hook_prompt.into()),
             RolloutItem::EventMsg(EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 turn_id: "turn-a".into(),
                 started_at: None,
                 last_agent_message: None,
@@ -4786,6 +4810,7 @@ mod tests {
                 collaboration_mode_kind: Default::default(),
             })),
             RolloutItem::EventMsg(EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 turn_id: "turn-a".into(),
                 started_at: None,
                 last_agent_message: None,
@@ -4846,6 +4871,7 @@ mod tests {
                 .into(),
             ),
             RolloutItem::EventMsg(EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 turn_id: "turn-a".into(),
                 started_at: None,
                 last_agent_message: None,
@@ -5024,6 +5050,7 @@ mod tests {
         )));
         let complete_changes = builder.handle_rollout_item_with_changes(&RolloutItem::EventMsg(
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 turn_id: "turn-a".into(),
                 started_at: None,
                 last_agent_message: None,
@@ -5113,6 +5140,7 @@ mod tests {
                 collaboration_mode_kind: Default::default(),
             })),
             RolloutItem::EventMsg(EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 turn_id: "turn-a".into(),
                 started_at: None,
                 last_agent_message: None,

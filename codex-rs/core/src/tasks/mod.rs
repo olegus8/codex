@@ -442,6 +442,9 @@ impl Session {
         self: &Arc<Self>,
         sub_id: String,
     ) {
+        if crate::session::context_pause::waiting_for_user(self).await {
+            return;
+        }
         if !self.input_queue.has_pending_mailbox_items().await
             || (!self.input_queue.has_trigger_turn_mailbox_items().await
                 && !self.has_outstanding_durable_sleep())
@@ -803,6 +806,10 @@ impl Session {
                 .await;
             EventMsg::TurnComplete(TurnCompleteEvent {
                 turn_id: turn_context.sub_id.clone(),
+                context_pause: turn_context
+                    .extension_data
+                    .get::<codex_protocol::protocol::ContextPause>()
+                    .map(|pause| (*pause).clone()),
                 last_agent_message,
                 error,
                 started_at,
