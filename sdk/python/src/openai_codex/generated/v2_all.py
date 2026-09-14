@@ -11179,13 +11179,7 @@ class Turn(BaseModel):
             alias="completedAt", description="Unix timestamp (in seconds) when the turn completed."
         ),
     ] = None
-    context_pause: Annotated[
-        ContextPause | None,
-        Field(
-            alias="contextPause",
-            description="A completed turn paused for explicit user input at a context threshold.",
-        ),
-    ] = None
+    context_pause: Annotated[ContextPause | None, Field(alias="contextPause")] = None
     duration_ms: Annotated[
         int | None,
         Field(

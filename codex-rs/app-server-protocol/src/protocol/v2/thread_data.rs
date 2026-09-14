@@ -385,7 +385,6 @@ impl<'de> Deserialize<'de> for Thread {
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/")]
 pub struct Turn {
-    /// A completed turn paused for explicit user input at a context threshold.
     #[serde(default)]
     pub context_pause: Option<ContextPause>,
     /// Identifier for this turn. Codex-generated turn IDs are UUIDv7.

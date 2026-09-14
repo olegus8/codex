@@ -14,7 +14,7 @@ pub struct ContextWindowUsage {
     pub context_window: i64,
 }
 
-/// A once-per-thread pause that accepts a later explicit user message.
+/// Pauses once per thread until explicit user input.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/")]

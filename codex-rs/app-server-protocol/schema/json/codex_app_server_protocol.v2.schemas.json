@@ -6423,7 +6423,7 @@
       "type": "object"
     },
     "ContextPause": {
-      "description": "A once-per-thread pause that accepts a later explicit user message.",
+      "description": "Pauses once per thread until explicit user input.",
       "properties": {
         "contextWindow": {
           "format": "int64",
@@ -22572,8 +22572,7 @@
               "type": "null"
             }
           ],
-          "default": null,
-          "description": "A completed turn paused for explicit user input at a context threshold."
+          "default": null
         },
         "durationMs": {
           "description": "Duration between turn start and completion in milliseconds, if known.",

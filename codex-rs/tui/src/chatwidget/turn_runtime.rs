@@ -490,7 +490,11 @@ impl ChatWidget {
         {
             self.input_queue.context_input_required = true;
             self.on_error(
-                "Context exhausted. History is preserved. Start a new session to continue.".into(),
+                concat!(
+                    "Context exhausted. History is preserved. ",
+                    "Start a new session to continue.",
+                )
+                .into(),
             );
             return;
         }

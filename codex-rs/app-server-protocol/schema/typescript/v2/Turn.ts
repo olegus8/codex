@@ -7,11 +7,7 @@ import type { TurnError } from "./TurnError";
 import type { TurnItemsView } from "./TurnItemsView";
 import type { TurnStatus } from "./TurnStatus";
 
-export type Turn = {
-/**
- * A completed turn paused for explicit user input at a context threshold.
- */
-contextPause: ContextPause | null,
+export type Turn = { contextPause: ContextPause | null,
 /**
  * Identifier for this turn. Codex-generated turn IDs are UUIDv7.
  */

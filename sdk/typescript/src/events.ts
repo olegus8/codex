@@ -38,7 +38,7 @@ export type TurnCompletedEvent = {
   context_pause?: ContextPause;
 };
 
-/** A completed turn paused until an explicit follow-up request. */
+/** Context pause awaiting explicit user input. */
 export type ContextPause = {
   used_tokens: number;
   context_window: number;
