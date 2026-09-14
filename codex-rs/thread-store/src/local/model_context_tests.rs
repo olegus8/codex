@@ -786,6 +786,7 @@ fn turn_started(turn_id: &str) -> RolloutItem {
 
 fn turn_complete(turn_id: &str) -> RolloutItem {
     RolloutItem::EventMsg(EventMsg::TurnComplete(TurnCompleteEvent {
+        context_pause: None,
         turn_id: turn_id.to_string(),
         last_agent_message: None,
         error: None,

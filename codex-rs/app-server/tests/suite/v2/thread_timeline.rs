@@ -126,6 +126,7 @@ async fn timeline_pages_mix_items_and_resolve_the_opening_realtime_session() -> 
                     },
                 }),
                 RolloutItem::EventMsg(EventMsg::TurnComplete(TurnCompleteEvent {
+                    context_pause: None,
                     turn_id: "turn-1".to_string(),
                     last_agent_message: None,
                     error: None,

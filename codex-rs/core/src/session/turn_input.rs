@@ -166,6 +166,9 @@ impl PreparedTurnInputSettings {
         let Some((turn_context, settings_snapshot)) = turn_context else {
             return Ok(None);
         };
+        if kind == TurnStartKind::User {
+            session.state.lock().await.context_pause.waiting_for_user = false;
+        }
         if let Some(turn_trigger) = turn_trigger {
             turn_context
                 .turn_metadata_state
@@ -266,6 +269,13 @@ async fn start_or_steer(
         }
     };
     let settings = PreparedTurnInputSettings::prepare(session, thread_settings, start).await?;
+    if super::context_pause::waiting_for_user(session).await
+        && !matches!(&input, SubmittedTurnInput::UserInput { content, .. } if !content.is_empty())
+    {
+        return Err(CodexErr::InvalidRequest(
+            "Context paused; explicit user input is required to continue.".to_string(),
+        ));
+    }
     match session
         .steer_input(
             &mut input,
@@ -349,7 +359,14 @@ async fn start_if_idle(
         responsesapi_client_metadata,
         ..
     } = request;
-    if session.input_queue.has_trigger_turn_mailbox_items().await {
+    if kind != TurnStartKind::User && super::context_pause::waiting_for_user(session).await {
+        return Err(CodexErr::InvalidRequest(
+            "Context paused; explicit user input is required to continue.".to_string(),
+        ));
+    }
+    if session.input_queue.has_trigger_turn_mailbox_items().await
+        && !super::context_pause::waiting_for_user(session).await
+    {
         return Ok(TurnInputSubmission::NotSubmitted {
             reason: NotSubmittedReason::PendingTriggerTurn,
         });
@@ -396,7 +413,9 @@ async fn start_if_idle(
         Arc::clone(&active_turn.turn_state)
     };
 
-    if session.input_queue.has_trigger_turn_mailbox_items().await {
+    if session.input_queue.has_trigger_turn_mailbox_items().await
+        && !super::context_pause::waiting_for_user(session).await
+    {
         session.clear_reserved_idle_turn(&turn_state).await;
         session.maybe_start_turn_for_pending_work().await;
         return Ok(TurnInputSubmission::NotSubmitted {

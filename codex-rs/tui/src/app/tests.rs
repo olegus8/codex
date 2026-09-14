@@ -8017,6 +8017,7 @@ async fn prompt_edit_forks_before_selected_prompt_and_preserves_source() -> Resu
                 ..Default::default()
             })),
             RolloutItem::EventMsg(EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 turn_id: turn_id.to_string(),
                 last_agent_message: None,
                 error: None,

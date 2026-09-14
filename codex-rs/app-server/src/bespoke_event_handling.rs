@@ -2161,6 +2161,7 @@ mod tests {
 
     fn turn_complete_event(turn_id: &str) -> TurnCompleteEvent {
         TurnCompleteEvent {
+            context_pause: None,
             turn_id: turn_id.to_string(),
             started_at: None,
             last_agent_message: None,
