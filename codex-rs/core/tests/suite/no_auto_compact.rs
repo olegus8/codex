@@ -60,7 +60,10 @@ fn no_auto_compact(provider: Provider) -> TestCodexBuilder {
             config.update_plan_enabled = true;
             config.model_auto_compact_token_limit = Some(100_000);
             config.compact_prompt = Some(SUMMARIZATION_PROMPT.to_string());
-            config.features.disable(Feature::TokenBudget).unwrap();
+            config
+                .features
+                .disable(Feature::TokenBudget)
+                .expect("disable token budget");
         })
 }
 
@@ -397,7 +400,7 @@ async fn no_auto_compact_keeps_manual_compaction(provider: Provider) -> Result<(
     test.codex.shutdown_and_wait().await?;
     let rollout = std::fs::read_to_string(test.session_configured.rollout_path.expect("rollout"))?;
     assert!(rollout.lines().any(|line| {
-        let value: Value = serde_json::from_str(line).unwrap();
+        let value: Value = serde_json::from_str(line).expect("parse rollout line");
         value["type"] == "compacted"
     }));
     Ok(())
@@ -425,7 +428,10 @@ async fn no_auto_compact_refuses_model_requested_reset() -> Result<()> {
     .await;
     let test = no_auto_compact(Provider::Remote)
         .with_config(|config| {
-            config.features.enable(Feature::TokenBudget).unwrap();
+            config
+                .features
+                .enable(Feature::TokenBudget)
+                .expect("enable token budget");
             config.token_budget = Some(TokenBudgetConfig {
                 auto_compact_fallback_prompt: Some("Prepare automatic reset".to_string()),
                 auto_compact_fallback_buffer_tokens: Some(20_000),
