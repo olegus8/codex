@@ -74,7 +74,7 @@ pub(crate) async fn maybe_pause(
     true
 }
 
-/// Append the pause marker and flush completed history before publishing it.
+/// Flush the pause marker before delivery.
 pub(crate) async fn persist_completion(session: &Session, event: &EventMsg) -> anyhow::Result<()> {
     if let Some(thread) = session.live_thread() {
         thread

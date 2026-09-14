@@ -84,7 +84,7 @@ impl SessionTask for RegularTask {
             )
             .instrument(run_turn_span.clone())
             .await?;
-            // Task completion preserves pending input after errors and context pauses.
+            // Preserve pending input without restarting the turn.
             if ctx.terminal_error.lock().await.is_some()
                 || ctx
                     .extension_data

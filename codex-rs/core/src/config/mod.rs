@@ -622,7 +622,6 @@ pub struct Config {
 
     pub model_auto_compact_enabled: bool,
 
-    /// Optional once-per-session pause percentage of the usable context window.
     pub model_context_pause_percent: Option<u8>,
 
     /// Token usage threshold triggering auto-compaction of conversation history.
