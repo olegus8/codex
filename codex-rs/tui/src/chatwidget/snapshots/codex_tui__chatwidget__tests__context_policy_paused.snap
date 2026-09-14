@@ -1,0 +1,7 @@
+---
+source: tui/src/chatwidget/tests/context_policy_tests.rs
+expression: normalize_completion_timestamps(lines_to_single_string(&history))
+---
+  done [completion time]
+
+• Paused at the 70% context threshold (133,000 of 190,000 tokens used). Send a message to continue or request a handoff.

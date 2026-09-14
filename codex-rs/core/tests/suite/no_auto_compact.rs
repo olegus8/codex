@@ -229,6 +229,44 @@ enum Exhaustion {
     IncomingInput,
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn context_policy_provider_exhaustion_after_usage_stays_full() -> Result<()> {
+    skip_if_no_network!(Ok(()));
+    let server = start_mock_server().await;
+    let first = mount_sse_once(
+        &server,
+        sse(vec![
+            ev_assistant_message("m1", "Keep working"),
+            ev_completed_with_tokens("r1", /*total_tokens*/ 90_000),
+        ]),
+    )
+    .await;
+    let full = mount_sse_once(
+        &server,
+        sse_failed("r2", "context_length_exceeded", "Context is full"),
+    )
+    .await;
+    let test = no_auto_compact(Provider::Remote)
+        .build_with_auto_env(&server)
+        .await?;
+    test.submit_turn("First turn").await?;
+    for prompt in ["Fill the window", "Preserve this handoff"] {
+        submit(&test, prompt).await?;
+        expect_exhaustion(&test).await;
+    }
+    assert_eq!(first.requests().len(), 1);
+    assert_eq!(full.requests().len(), 1);
+    let info = test.codex.token_usage_info().await.expect("usage");
+    let usage = info.context_window_usage.expect("runtime usage");
+    assert!(usage.used_tokens >= usage.context_window);
+    assert!(
+        retained_rollout(&test)
+            .await?
+            .contains("Preserve this handoff")
+    );
+    Ok(())
+}
+
 #[test_case(Exhaustion::NextTurn; "next turn")]
 #[test_case(Exhaustion::ToolResult; "tool result")]
 #[test_case(Exhaustion::Provider; "provider error")]

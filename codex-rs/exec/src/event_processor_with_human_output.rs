@@ -307,6 +307,12 @@ impl EventProcessor for EventProcessorWithHumanOutput {
             }
             ServerNotification::TurnCompleted(notification) => match notification.turn.status {
                 TurnStatus::Completed => {
+                    if let Some(pause) = &notification.turn.context_pause {
+                        eprintln!(
+                            "Paused at the {}% context threshold ({} of {} tokens used). Resume this thread to continue or request a handoff.",
+                            pause.threshold_percent, pause.used_tokens, pause.context_window,
+                        );
+                    }
                     let rendered_message = self
                         .final_message_rendered
                         .then(|| self.final_message.clone())

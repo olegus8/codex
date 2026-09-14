@@ -117,6 +117,8 @@ export type { ConsumeAccountRateLimitResetCreditOutcome } from "./ConsumeAccount
 export type { ConsumeAccountRateLimitResetCreditParams } from "./ConsumeAccountRateLimitResetCreditParams";
 export type { ConsumeAccountRateLimitResetCreditResponse } from "./ConsumeAccountRateLimitResetCreditResponse";
 export type { ContextCompactedNotification } from "./ContextCompactedNotification";
+export type { ContextPause } from "./ContextPause";
+export type { ContextWindowUsage } from "./ContextWindowUsage";
 export type { CreditsSnapshot } from "./CreditsSnapshot";
 export type { CyberAccessProgram } from "./CyberAccessProgram";
 export type { DeprecationNoticeNotification } from "./DeprecationNoticeNotification";

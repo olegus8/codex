@@ -124,6 +124,7 @@ fn finish_turn(
         ServerNotification::TurnCompleted(TurnCompletedNotification {
             thread_id: thread_id.to_string(),
             turn: Turn {
+                context_pause: None,
                 id: turn_id.to_string(),
                 items,
                 items_view: TurnItemsView::Summary,

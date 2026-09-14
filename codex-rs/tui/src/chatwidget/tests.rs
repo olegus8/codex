@@ -247,6 +247,8 @@ mod composer_submission;
 mod computer_activity_tests;
 #[path = "tests/config_errors_tests.rs"]
 mod config_errors;
+#[path = "tests/context_policy_tests.rs"]
+mod context_policy_tests;
 mod exec_flow;
 mod goal_menu;
 mod goal_validation;

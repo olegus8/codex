@@ -403,6 +403,7 @@ fn sample_turn_start_request(thread_id: &str, request_id: i64) -> ClientRequest 
 fn sample_turn_start_response(turn_id: &str) -> ClientResponsePayload {
     ClientResponsePayload::TurnStart(codex_app_server_protocol::TurnStartResponse {
         turn: Turn {
+            context_pause: None,
             id: turn_id.to_string(),
             items_view: codex_app_server_protocol::TurnItemsView::Full,
             items: vec![],
@@ -419,6 +420,7 @@ fn sample_turn_started_notification(thread_id: &str, turn_id: &str) -> ServerNot
     ServerNotification::TurnStarted(TurnStartedNotification {
         thread_id: thread_id.to_string(),
         turn: Turn {
+            context_pause: None,
             id: turn_id.to_string(),
             items_view: codex_app_server_protocol::TurnItemsView::Full,
             items: vec![],
@@ -456,6 +458,7 @@ fn sample_turn_completed_notification(
     ServerNotification::TurnCompleted(TurnCompletedNotification {
         thread_id: thread_id.to_string(),
         turn: Turn {
+            context_pause: None,
             id: turn_id.to_string(),
             items_view: codex_app_server_protocol::TurnItemsView::Full,
             items: vec![],

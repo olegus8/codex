@@ -9,6 +9,7 @@ use crate::protocol::v2::CollabAgentState;
 use crate::protocol::v2::CollabAgentTool;
 use crate::protocol::v2::CollabAgentToolCallStatus;
 use crate::protocol::v2::CommandExecutionStatus;
+use crate::protocol::v2::ContextPause;
 use crate::protocol::v2::DynamicToolCallOutputContentItem;
 use crate::protocol::v2::DynamicToolCallStatus;
 use crate::protocol::v2::McpToolCallAppContext;
@@ -103,6 +104,7 @@ pub struct ThreadHistoryItemChange {
 /// re-reading the full item list.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ThreadHistoryTurnChange {
+    pub context_pause: Option<ContextPause>,
     pub turn_id: String,
     pub root_turn_id: Option<String>,
     pub status: TurnStatus,
@@ -131,6 +133,7 @@ impl ThreadHistoryChangeSet {
 impl ThreadHistoryTurnChange {
     fn from_pending_turn(turn: &PendingTurn) -> Self {
         Self {
+            context_pause: turn.context_pause.clone(),
             turn_id: turn.id.clone(),
             root_turn_id: turn.root_turn_id.clone(),
             status: turn.status.clone(),
@@ -1270,6 +1273,7 @@ impl ThreadHistoryBuilder {
             additional_details: None,
         });
         let apply_completion = |turn: &mut PendingTurn| {
+            turn.context_pause = payload.context_pause.clone().map(Into::into);
             if let Some(error) = terminal_error.as_ref() {
                 turn.status = TurnStatus::Failed;
                 turn.error = Some(error.clone());
@@ -1306,6 +1310,7 @@ impl ThreadHistoryBuilder {
             }
             turn.completed_at = payload.completed_at;
             turn.duration_ms = payload.duration_ms;
+            turn.context_pause = payload.context_pause.clone().map(Into::into);
             let changed_turn = ThreadHistoryTurnChange::from_pending_turn(turn);
             self.record_changed_turn(changed_turn);
             return;
@@ -1372,6 +1377,7 @@ impl ThreadHistoryBuilder {
             }
         });
         PendingTurn {
+            context_pause: None,
             id,
             root_turn_id: None,
             items: Vec::new(),
@@ -1604,6 +1610,7 @@ impl TurnItemIndex {
 }
 
 struct PendingTurn {
+    context_pause: Option<ContextPause>,
     id: String,
     root_turn_id: Option<String>,
     items: Vec<ThreadItem>,
@@ -1643,6 +1650,7 @@ impl PendingTurn {
 impl From<PendingTurn> for Turn {
     fn from(value: PendingTurn) -> Self {
         Self {
+            context_pause: value.context_pause,
             id: value.id,
             items: value.items,
             items_view: TurnItemsView::Full,
@@ -1658,6 +1666,7 @@ impl From<PendingTurn> for Turn {
 impl From<&PendingTurn> for Turn {
     fn from(value: &PendingTurn) -> Self {
         Self {
+            context_pause: value.context_pause.clone(),
             id: value.id.clone(),
             items: value.items.clone(),
             items_view: TurnItemsView::Full,
@@ -2546,6 +2555,7 @@ mod tests {
         assert_eq!(
             turns[0],
             Turn {
+                context_pause: None,
                 id: "turn-image".into(),
                 status: TurnStatus::Completed,
                 error: None,
@@ -4118,6 +4128,7 @@ mod tests {
             build_turns_from_rollout_items(&items),
             vec![
                 Turn {
+                    context_pause: None,
                     id: "turn-a".into(),
                     items_view: TurnItemsView::Full,
                     items: vec![ThreadItem::UserMessage {
@@ -4143,6 +4154,7 @@ mod tests {
                     duration_ms: Some(10_000),
                 },
                 Turn {
+                    context_pause: None,
                     id: "turn-b".into(),
                     items_view: TurnItemsView::Full,
                     items: vec![ThreadItem::UserMessage {
@@ -4276,6 +4288,7 @@ mod tests {
         assert_eq!(
             turns,
             vec![Turn {
+                context_pause: None,
                 id: "turn-compact".into(),
                 status: TurnStatus::Completed,
                 error: None,
@@ -4555,6 +4568,7 @@ mod tests {
         assert_eq!(
             turns[0],
             Turn {
+                context_pause: None,
                 id: "turn-a".into(),
                 status: TurnStatus::Completed,
                 error: None,
@@ -4678,6 +4692,7 @@ mod tests {
         assert_eq!(
             build_turns_from_rollout_items(&items),
             vec![Turn {
+                context_pause: None,
                 id: "turn-a".into(),
                 items_view: TurnItemsView::Full,
                 items: vec![ThreadItem::UserMessage {
@@ -4918,6 +4933,7 @@ mod tests {
                     completed_at_ms: None,
                 }],
                 changed_turns: vec![ThreadHistoryTurnChange {
+                    context_pause: None,
                     turn_id: "rollout-0".into(),
                     root_turn_id: None,
                     status: TurnStatus::Completed,
@@ -5026,6 +5042,7 @@ mod tests {
             ThreadHistoryChangeSet {
                 changed_items: Vec::new(),
                 changed_turns: vec![ThreadHistoryTurnChange {
+                    context_pause: None,
                     turn_id: "turn-a".into(),
                     root_turn_id: Some("root-turn".into()),
                     status: TurnStatus::InProgress,
@@ -5066,6 +5083,7 @@ mod tests {
             ThreadHistoryChangeSet {
                 changed_items: Vec::new(),
                 changed_turns: vec![ThreadHistoryTurnChange {
+                    context_pause: None,
                     turn_id: "turn-a".into(),
                     root_turn_id: Some("root-turn".into()),
                     status: TurnStatus::Completed,
@@ -5114,6 +5132,7 @@ mod tests {
                     completed_at_ms: None,
                 }],
                 changed_turns: vec![ThreadHistoryTurnChange {
+                    context_pause: None,
                     turn_id: "rollout-0".into(),
                     root_turn_id: None,
                     status: TurnStatus::Completed,
@@ -5156,6 +5175,7 @@ mod tests {
             ThreadHistoryChangeSet {
                 changed_items: Vec::new(),
                 changed_turns: vec![ThreadHistoryTurnChange {
+                    context_pause: None,
                     turn_id: "turn-a".into(),
                     root_turn_id: Some("root-turn".into()),
                     status: TurnStatus::Completed,

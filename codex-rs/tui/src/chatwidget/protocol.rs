@@ -388,6 +388,7 @@ impl ChatWidget {
         self.thread_usage.replaying_turn_completion = replay_kind.is_some();
         match notification.turn.status {
             TurnStatus::Completed => {
+                self.input_queue.context_input_required = notification.turn.context_pause.is_some();
                 let last_agent_message =
                     notification
                         .turn
@@ -436,6 +437,9 @@ impl ChatWidget {
                     completion,
                     replay_kind.is_some(),
                 );
+                if let Some(pause) = &notification.turn.context_pause {
+                    self.show_context_pause(pause);
+                }
             }
             TurnStatus::Interrupted => {
                 self.last_non_retry_error = None;

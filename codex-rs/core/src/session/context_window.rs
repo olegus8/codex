@@ -3,6 +3,11 @@ use super::turn_context::TurnContext;
 use crate::config::Config;
 use codex_protocol::config_types::AutoCompactTokenLimitScope;
 use codex_protocol::openai_models::ModelInfo;
+use codex_protocol::protocol::ContextWindowUsage;
+use codex_protocol::protocol::EventMsg;
+use codex_protocol::protocol::TokenCountEvent;
+use codex_protocol::protocol::TokenUsage;
+use codex_protocol::protocol::TokenUsageInfo;
 
 pub(crate) fn automatic_compaction_enabled(turn_context: &TurnContext) -> bool {
     turn_context.config.model_auto_compact_enabled
@@ -25,6 +30,40 @@ pub(crate) struct ContextWindowTokenStatus {
 
 fn tokens_remaining(limit: Option<i64>, used: i64) -> Option<i64> {
     limit.map(|limit| limit.saturating_sub(used).max(0))
+}
+
+pub(crate) async fn publish_usage(
+    sess: &Session,
+    turn: &TurnContext,
+    status: &ContextWindowTokenStatus,
+) {
+    if automatic_compaction_enabled(turn) {
+        return;
+    }
+    let Some(context_window) = status.full_context_window_limit else {
+        return;
+    };
+    let (info, rate_limits) = {
+        let mut state = sess.state.lock().await;
+        let (info, rate_limits) = state.token_info_and_rate_limits();
+        let mut info = info.unwrap_or(TokenUsageInfo {
+            context_window_usage: None,
+            total_token_usage: TokenUsage::default(),
+            last_token_usage: TokenUsage::default(),
+            model_context_window: Some(context_window),
+        });
+        info.context_window_usage = Some(ContextWindowUsage {
+            used_tokens: status.active_context_tokens,
+            context_window,
+        });
+        state.set_token_info(Some(info.clone()));
+        (Some(info), rate_limits)
+    };
+    sess.send_event(
+        turn,
+        EventMsg::TokenCount(TokenCountEvent { info, rate_limits }),
+    )
+    .await;
 }
 
 pub(crate) async fn context_window_token_status(

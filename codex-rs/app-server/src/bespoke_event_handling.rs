@@ -159,6 +159,7 @@ pub(crate) async fn apply_bespoke_event_handling(
             let turn = {
                 let state = thread_state.lock().await;
                 let mut turn = state.active_turn_snapshot().unwrap_or_else(|| Turn {
+                    context_pause: None,
                     id: payload.turn_id.clone(),
                     items: Vec::new(),
                     items_view: TurnItemsView::NotLoaded,
@@ -1302,6 +1303,7 @@ async fn handle_turn_plan_update(
 }
 
 struct TurnCompletionMetadata {
+    context_pause: Option<codex_app_server_protocol::ContextPause>,
     status: TurnStatus,
     error: Option<TurnError>,
     last_agent_message: Option<ThreadItem>,
@@ -1323,6 +1325,7 @@ async fn emit_turn_completed_with_status(
     let notification = TurnCompletedNotification {
         thread_id: conversation_id.to_string(),
         turn: Turn {
+            context_pause: turn_completion_metadata.context_pause,
             id: event_turn_id,
             items,
             items_view,
@@ -1505,6 +1508,7 @@ async fn handle_turn_complete(
         conversation_id,
         event_turn_id,
         TurnCompletionMetadata {
+            context_pause: turn_complete_event.context_pause.map(Into::into),
             status,
             error,
             last_agent_message,
@@ -1530,6 +1534,7 @@ async fn handle_turn_interrupted(
         conversation_id,
         event_turn_id,
         TurnCompletionMetadata {
+            context_pause: None,
             status: TurnStatus::Interrupted,
             error: None,
             last_agent_message: None,
@@ -3626,6 +3631,7 @@ mod tests {
         );
 
         let info = TokenUsageInfo {
+            context_window_usage: None,
             total_token_usage: TokenUsage {
                 input_tokens: 100,
                 cached_input_tokens: 25,

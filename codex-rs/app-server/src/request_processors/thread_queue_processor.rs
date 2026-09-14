@@ -228,6 +228,7 @@ impl ThreadQueueRequestProcessor {
             .await;
         Ok(ThreadQueueStartResponse {
             turn: Turn {
+                context_pause: None,
                 id: turn_id,
                 items: vec![],
                 items_view: TurnItemsView::NotLoaded,

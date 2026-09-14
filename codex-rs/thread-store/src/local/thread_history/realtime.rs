@@ -124,6 +124,7 @@ ORDER BY rollout_ordinal DESC, item_id DESC LIMIT ?7
 SELECT rollout_end_ordinal AS rollout_ordinal, 3 AS kind, turn_id AS id, turn_id,
        json_object('type', 'turnCompleted', 'position', rollout_end_ordinal,
                    'turnId', turn_id, 'status', status, 'error', json(error_json),
+                   'contextPause', json(context_pause_json),
                    'startedAt', started_at, 'completedAt', completed_at,
                    'durationMs', duration_ms) AS item_json
 FROM thread_turns
