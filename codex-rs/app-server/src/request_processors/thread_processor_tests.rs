@@ -291,7 +291,7 @@ mod thread_processor_behavior_tests {
         ))];
         let active_turn = Turn {
             context_pause: None,
-            id:"live-turn".to_string(),
+            id: "live-turn".to_string(),
             items: vec![ThreadItem::UserMessage {
                 id: "live-user-message".to_string(),
                 client_id: None,

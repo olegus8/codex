@@ -90,7 +90,7 @@ fn complete_plan_turn(app: &mut App) {
     let thread_id = ThreadId::new().to_string();
     let turn = Turn {
         context_pause: None,
-        id:"plan-turn".into(),
+        id: "plan-turn".into(),
         items_view: TurnItemsView::Full,
         items: Vec::new(),
         status: TurnStatus::InProgress,

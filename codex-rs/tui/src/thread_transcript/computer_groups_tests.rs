@@ -23,7 +23,7 @@ fn computer(id: &str) -> ThreadItem {
 fn turn(id: &str, items: Vec<ThreadItem>) -> Turn {
     Turn {
         context_pause: None,
-        id:id.to_string(),
+        id: id.to_string(),
         items,
         items_view: TurnItemsView::Full,
         status: TurnStatus::Completed,

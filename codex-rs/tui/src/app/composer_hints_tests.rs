@@ -47,7 +47,7 @@ async fn usage_notice_preserves_composer_geometry_on_recovery() -> Result<()> {
                     thread_id: ThreadId::new().to_string(),
                     turn: Turn {
                         context_pause: None,
-                        id:"turn".into(),
+                        id: "turn".into(),
                         items_view: TurnItemsView::Full,
                         items: Vec::new(),
                         status: TurnStatus::InProgress,

@@ -1258,7 +1258,7 @@ async fn interrupted_turn_after_goal_budget_limited_uses_budget_message_snapshot
                 thread_id: "thread-1".to_string(),
                 turn: codex_app_server_protocol::Turn {
                     context_pause: None,
-                    id:"turn-1".to_string(),
+                    id: "turn-1".to_string(),
                     items_view: codex_app_server_protocol::TurnItemsView::Full,
                     items: Vec::new(),
                     status: codex_app_server_protocol::TurnStatus::InProgress,
@@ -1296,7 +1296,7 @@ async fn interrupted_turn_after_goal_budget_limited_uses_budget_message_snapshot
                 thread_id: "thread-1".to_string(),
                 turn: codex_app_server_protocol::Turn {
                     context_pause: None,
-                    id:"turn-1".to_string(),
+                    id: "turn-1".to_string(),
                     items_view: codex_app_server_protocol::TurnItemsView::Full,
                     items: Vec::new(),
                     status: codex_app_server_protocol::TurnStatus::Interrupted,

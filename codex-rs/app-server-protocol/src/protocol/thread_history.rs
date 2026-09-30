@@ -4418,7 +4418,7 @@ mod tests {
             vec![
                 Turn {
                     context_pause: None,
-                    id:"turn-a".into(),
+                    id: "turn-a".into(),
                     items_view: TurnItemsView::Full,
                     items: vec![ThreadItem::UserMessage {
                         id: "item-1".into(),
@@ -4444,7 +4444,7 @@ mod tests {
                 },
                 Turn {
                     context_pause: None,
-                    id:"turn-b".into(),
+                    id: "turn-b".into(),
                     items_view: TurnItemsView::Full,
                     items: vec![ThreadItem::UserMessage {
                         id: "item-2".into(),
@@ -4580,7 +4580,7 @@ mod tests {
             turns,
             vec![Turn {
                 context_pause: None,
-                id:"turn-compact".into(),
+                id: "turn-compact".into(),
                 status: TurnStatus::Completed,
                 error: None,
                 started_at: None,
@@ -4860,7 +4860,7 @@ mod tests {
             turns[0],
             Turn {
                 context_pause: None,
-                id:"turn-a".into(),
+                id: "turn-a".into(),
                 status: TurnStatus::Completed,
                 error: None,
                 started_at: None,
@@ -4984,7 +4984,7 @@ mod tests {
             build_turns_from_rollout_items(&items),
             vec![Turn {
                 context_pause: None,
-                id:"turn-a".into(),
+                id: "turn-a".into(),
                 items_view: TurnItemsView::Full,
                 items: vec![ThreadItem::UserMessage {
                     id: "item-1".into(),
@@ -5225,7 +5225,7 @@ mod tests {
                 }],
                 changed_turns: vec![ThreadHistoryTurnMetadata {
                     context_pause: None,
-                    turn_id:"rollout-0".into(),
+                    turn_id: "rollout-0".into(),
                     root_turn_id: None,
                     status: TurnStatus::Completed,
                     error: None,
@@ -5334,7 +5334,7 @@ mod tests {
                 changed_items: Vec::new(),
                 changed_turns: vec![ThreadHistoryTurnMetadata {
                     context_pause: None,
-                    turn_id:"turn-a".into(),
+                    turn_id: "turn-a".into(),
                     root_turn_id: Some("root-turn".into()),
                     status: TurnStatus::InProgress,
                     error: None,
@@ -5375,7 +5375,7 @@ mod tests {
                 changed_items: Vec::new(),
                 changed_turns: vec![ThreadHistoryTurnMetadata {
                     context_pause: None,
-                    turn_id:"turn-a".into(),
+                    turn_id: "turn-a".into(),
                     root_turn_id: Some("root-turn".into()),
                     status: TurnStatus::Completed,
                     error: None,
@@ -5424,7 +5424,7 @@ mod tests {
                 }],
                 changed_turns: vec![ThreadHistoryTurnMetadata {
                     context_pause: None,
-                    turn_id:"rollout-0".into(),
+                    turn_id: "rollout-0".into(),
                     root_turn_id: None,
                     status: TurnStatus::Completed,
                     error: None,
@@ -5467,7 +5467,7 @@ mod tests {
                 changed_items: Vec::new(),
                 changed_turns: vec![ThreadHistoryTurnMetadata {
                     context_pause: None,
-                    turn_id:"turn-a".into(),
+                    turn_id: "turn-a".into(),
                     root_turn_id: Some("root-turn".into()),
                     status: TurnStatus::Completed,
                     error: None,

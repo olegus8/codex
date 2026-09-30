@@ -60,7 +60,7 @@ fn projects_turn_lifecycle_without_prior_builder_state() {
         ThreadHistoryChangeSet {
             changed_turns: vec![ThreadHistoryTurnMetadata {
                 context_pause: None,
-                turn_id:"turn-1".to_string(),
+                turn_id: "turn-1".to_string(),
                 root_turn_id: None,
                 status: TurnStatus::Completed,
                 error: None,
@@ -99,7 +99,7 @@ fn projects_failed_turn_completion_as_snapshot() {
         ThreadHistoryChangeSet {
             changed_turns: vec![ThreadHistoryTurnMetadata {
                 context_pause: None,
-                turn_id:"turn-1".to_string(),
+                turn_id: "turn-1".to_string(),
                 root_turn_id: None,
                 status: TurnStatus::Failed,
                 error: Some(TurnError {
@@ -254,7 +254,7 @@ fn projects_identified_turn_aborts() {
         ThreadHistoryChangeSet {
             changed_turns: vec![ThreadHistoryTurnMetadata {
                 context_pause: None,
-                turn_id:"turn-1".to_string(),
+                turn_id: "turn-1".to_string(),
                 root_turn_id: None,
                 status: TurnStatus::Interrupted,
                 error: None,

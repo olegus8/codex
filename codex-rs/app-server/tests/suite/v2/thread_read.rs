@@ -1755,7 +1755,7 @@ async fn paginated_history_lists_and_legacy_reads_use_projected_turns_and_items(
 
     let expected_turn_1_full = Turn {
         context_pause: None,
-        id:"turn-1".to_string(),
+        id: "turn-1".to_string(),
         items: vec![
             ThreadItem::UserMessage {
                 id: "user-1".to_string(),
@@ -1785,7 +1785,7 @@ async fn paginated_history_lists_and_legacy_reads_use_projected_turns_and_items(
     };
     let expected_turn_2_full = Turn {
         context_pause: None,
-        id:"turn-2".to_string(),
+        id: "turn-2".to_string(),
         items: vec![ThreadItem::UserMessage {
             id: "user-2".to_string(),
             client_id: None,
@@ -1949,7 +1949,7 @@ async fn paginated_history_lists_and_legacy_reads_use_projected_turns_and_items(
         first_page.data,
         vec![Turn {
             context_pause: None,
-            id:"turn-1".to_string(),
+            id: "turn-1".to_string(),
             items: vec![
                 ThreadItem::UserMessage {
                     id: "user-1".to_string(),
@@ -1987,7 +1987,7 @@ async fn paginated_history_lists_and_legacy_reads_use_projected_turns_and_items(
         second_page.data,
         vec![Turn {
             context_pause: None,
-            id:"turn-2".to_string(),
+            id: "turn-2".to_string(),
             items: Vec::new(),
             items_view: TurnItemsView::NotLoaded,
             status: TurnStatus::Interrupted,

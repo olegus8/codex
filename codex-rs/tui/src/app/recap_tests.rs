@@ -45,7 +45,7 @@ use uuid::Uuid;
 fn turn(status: TurnStatus) -> Turn {
     Turn {
         context_pause: None,
-        id:"turn".to_string(),
+        id: "turn".to_string(),
         items: Vec::new(),
         items_view: Default::default(),
         status,

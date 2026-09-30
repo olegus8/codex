@@ -6538,6 +6538,48 @@
       "title": "ContextCompactedNotification",
       "type": "object"
     },
+    "ContextPause": {
+      "description": "Pauses once per thread until explicit user input.",
+      "properties": {
+        "contextWindow": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "thresholdPercent": {
+          "format": "uint8",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "usedTokens": {
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "contextWindow",
+        "thresholdPercent",
+        "usedTokens"
+      ],
+      "type": "object"
+    },
+    "ContextWindowUsage": {
+      "description": "Runtime accounting against the usable context limit.",
+      "properties": {
+        "contextWindow": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "usedTokens": {
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "contextWindow",
+        "usedTokens"
+      ],
+      "type": "object"
+    },
     "ConversationTextRole": {
       "enum": [
         "user",
@@ -22469,6 +22511,17 @@
                 "null"
               ]
             },
+            "context_pause": {
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/ContextPause"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
             "duration_ms": {
               "format": "int64",
               "type": [
@@ -22525,6 +22578,18 @@
     },
     "ThreadTokenUsage": {
       "properties": {
+        "contextWindowUsage": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ContextWindowUsage"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Usage against the usable limit when automatic compaction is disabled."
+        },
         "last": {
           "$ref": "#/definitions/TokenUsageBreakdown"
         },
@@ -22938,6 +23003,18 @@
             "integer",
             "null"
           ]
+        },
+        "contextPause": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ContextPause"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Autonomous processing paused at the context threshold until explicit user input."
         },
         "durationMs": {
           "description": "Duration between turn start and completion in milliseconds, if known.",

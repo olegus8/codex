@@ -90,10 +90,7 @@ pub(crate) async fn context_window_token_status_for_model(
 ) -> ContextWindowTokenStatus {
     let config = config_for_model(config, turn_context, model_info);
     context_window_token_status_with_config(
-        sess,
-        &config,
-        model_info,
-        /*estimate_unreported_usage*/ false,
+        sess, &config, model_info, /*estimate_unreported_usage*/ false,
     )
     .await
 }
@@ -106,10 +103,7 @@ pub(crate) async fn usable_context_token_status(
 ) -> ContextWindowTokenStatus {
     let config = config_for_model(turn_context.config.as_ref(), turn_context, model_info);
     context_window_token_status_with_config(
-        sess,
-        &config,
-        model_info,
-        /*estimate_unreported_usage*/ true,
+        sess, &config, model_info, /*estimate_unreported_usage*/ true,
     )
     .await
 }

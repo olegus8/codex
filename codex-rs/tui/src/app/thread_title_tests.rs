@@ -269,7 +269,7 @@ async fn check_thread_title_generation(scenario: TitleScenario) -> color_eyre::R
         .turns
         .push(Turn {
             context_pause: None,
-            id:"existing-turn".to_string(),
+            id: "existing-turn".to_string(),
             items: vec![title_user_message("user-message", "Fix the login timeout")],
             items_view: Default::default(),
             status: TurnStatus::Completed,

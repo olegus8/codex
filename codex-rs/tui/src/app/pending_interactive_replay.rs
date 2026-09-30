@@ -675,7 +675,7 @@ mod tests {
             thread_id: "thread-1".to_string(),
             turn: Turn {
                 context_pause: None,
-                id:turn_id.to_string(),
+                id: turn_id.to_string(),
                 items_view: codex_app_server_protocol::TurnItemsView::Full,
                 items: Vec::new(),
                 status: TurnStatus::Completed,

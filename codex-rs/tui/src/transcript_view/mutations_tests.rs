@@ -378,7 +378,7 @@ fn folding_a_reasoning_only_page_retains_its_find_and_copy_revision() {
     };
     let current = Turn {
         context_pause: None,
-        id:"turn".to_owned(),
+        id: "turn".to_owned(),
         items: vec![call, reasoning],
         items_view: TurnItemsView::Full,
         status: TurnStatus::Completed,
