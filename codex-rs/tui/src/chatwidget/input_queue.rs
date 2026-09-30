@@ -21,6 +21,8 @@ pub(super) struct PendingInputPreview {
 
 #[derive(Debug, Default)]
 pub(super) struct InputQueueState {
+    /// A context pause or exhaustion holds queued input for an explicit message.
+    pub(super) context_input_required: bool,
     /// The visible draft confirmed during startup, awaiting the protected-input handoff.
     pub(super) startup_submission: Option<crate::bottom_pane::ComposerDraftSnapshot>,
     /// User inputs queued while a turn is in progress.
@@ -58,6 +60,7 @@ impl InputQueueState {
     }
 
     pub(super) fn clear(&mut self) {
+        self.context_input_required = false;
         self.startup_submission = None;
         self.recovered_queue = false;
         self.queued_user_messages.clear();

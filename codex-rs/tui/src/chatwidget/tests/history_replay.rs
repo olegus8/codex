@@ -1125,7 +1125,8 @@ async fn replayed_retryable_app_server_error_keeps_turn_running() {
         ServerNotification::TurnStarted(TurnStartedNotification {
             thread_id: "thread-1".to_string(),
             turn: AppServerTurn {
-                id: "turn-1".to_string(),
+                context_pause: None,
+                id:"turn-1".to_string(),
                 items_view: codex_app_server_protocol::TurnItemsView::Full,
                 items: Vec::new(),
                 status: AppServerTurnStatus::InProgress,
@@ -1460,7 +1461,8 @@ async fn live_reasoning_summary_is_not_rendered_twice_when_item_completes() {
         ServerNotification::TurnStarted(TurnStartedNotification {
             thread_id: "thread-1".to_string(),
             turn: AppServerTurn {
-                id: "turn-1".to_string(),
+                context_pause: None,
+                id:"turn-1".to_string(),
                 items_view: codex_app_server_protocol::TurnItemsView::Full,
                 items: Vec::new(),
                 status: AppServerTurnStatus::InProgress,
@@ -1519,7 +1521,8 @@ async fn live_reasoning_summary_drops_empty_parts_without_losing_content() {
         ServerNotification::TurnStarted(TurnStartedNotification {
             thread_id: "thread-1".to_string(),
             turn: AppServerTurn {
-                id: "turn-1".to_string(),
+                context_pause: None,
+                id:"turn-1".to_string(),
                 items_view: codex_app_server_protocol::TurnItemsView::Full,
                 items: Vec::new(),
                 status: AppServerTurnStatus::InProgress,

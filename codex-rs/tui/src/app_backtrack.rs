@@ -724,7 +724,8 @@ mod tests {
 
     fn turn(turn_id: &str, status: TurnStatus, user_messages: usize) -> Turn {
         Turn {
-            id: turn_id.to_string(),
+            context_pause: None,
+            id:turn_id.to_string(),
             items: (0..user_messages)
                 .map(|index| ThreadItem::UserMessage {
                     id: format!("user-{index}"),

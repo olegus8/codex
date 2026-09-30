@@ -854,6 +854,7 @@ fn analytics_turn(turn_id: &str, status: TurnStatus) -> Turn {
         started_at: None,
         completed_at: None,
         duration_ms: None,
+        context_pause: None,
     }
 }
 

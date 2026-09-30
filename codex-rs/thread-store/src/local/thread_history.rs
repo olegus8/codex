@@ -302,6 +302,12 @@ async fn apply_change_set(
             .map(serde_json::to_string)
             .transpose()
             .map_err(thread_history_error)?;
+        let context_pause_json = turn
+            .context_pause
+            .as_ref()
+            .map(serde_json::to_string)
+            .transpose()
+            .map_err(thread_history_error)?;
         let (terminal_ordinal, terminal_byte_offset) = match &turn.status {
             TurnStatus::Completed | TurnStatus::Interrupted | TurnStatus::Failed => {
                 (Some(rollout_ordinal), Some(rollout_end_byte_offset))
@@ -324,8 +330,9 @@ INSERT INTO thread_turns (
     error_json,
     started_at,
     completed_at,
-    duration_ms
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    duration_ms,
+    context_pause_json
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(thread_id, turn_id) DO UPDATE SET
     rollout_end_ordinal = excluded.rollout_end_ordinal,
     rollout_end_byte_offset = excluded.rollout_end_byte_offset,
@@ -333,7 +340,8 @@ ON CONFLICT(thread_id, turn_id) DO UPDATE SET
     error_json = excluded.error_json,
     started_at = excluded.started_at,
     completed_at = excluded.completed_at,
-    duration_ms = excluded.duration_ms
+    duration_ms = excluded.duration_ms,
+    context_pause_json = excluded.context_pause_json
 WHERE thread_turns.rollout_end_ordinal IS NULL
   AND thread_turns.status = 'inProgress'
             "#,
@@ -349,6 +357,7 @@ WHERE thread_turns.rollout_end_ordinal IS NULL
         .bind(turn.started_at)
         .bind(turn.completed_at)
         .bind(turn.duration_ms)
+        .bind(context_pause_json)
         .execute(&mut **transaction)
         .await
         .map_err(thread_history_error)?;

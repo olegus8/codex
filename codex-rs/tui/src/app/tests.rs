@@ -7033,7 +7033,8 @@ async fn resizing_empty_transcript_schedules_settled_size_recheck() {
 
 fn test_turn(turn_id: &str, status: TurnStatus, items: Vec<ThreadItem>) -> Turn {
     Turn {
-        id: turn_id.to_string(),
+        context_pause: None,
+        id:turn_id.to_string(),
         items_view: codex_app_server_protocol::TurnItemsView::Full,
         items,
         status,
@@ -7101,6 +7102,7 @@ fn token_usage_notification(
                 reasoning_output_tokens: 0,
             },
             model_context_window,
+            context_window_usage: None,
         },
     })
 }
@@ -8236,6 +8238,7 @@ async fn prompt_edit_reverts_earlier_and_first_visible_prompts_in_place() -> Res
                 completed_at_ms: 0,
             })),
             RolloutItem::EventMsg(EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 turn_id: turn_id.to_string(),
                 last_agent_message: None,
                 error: None,
@@ -8621,7 +8624,8 @@ async fn replay_thread_snapshot_replays_turn_history_in_order() {
             )),
             turns: vec![
                 Turn {
-                    id: "turn-1".to_string(),
+                    context_pause: None,
+                    id:"turn-1".to_string(),
                     items_view: codex_app_server_protocol::TurnItemsView::Full,
                     items: vec![ThreadItem::UserMessage {
                         id: "user-1".to_string(),
@@ -8638,7 +8642,8 @@ async fn replay_thread_snapshot_replays_turn_history_in_order() {
                     duration_ms: None,
                 },
                 Turn {
-                    id: "turn-2".to_string(),
+                    context_pause: None,
+                    id:"turn-2".to_string(),
                     items_view: codex_app_server_protocol::TurnItemsView::Full,
                     items: vec![
                         ThreadItem::UserMessage {

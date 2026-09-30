@@ -1013,3 +1013,109 @@ async fn repair_recency_migration_succeeds_while_another_connection_holds_writer
     pool.close().await;
     repair_result.expect("current migration history should not need the writer slot");
 }
+
+async fn applied_thread_history_migrations(pool: &sqlx_sqlite::SqlitePool) -> Vec<(i64, String)> {
+    sqlx::query_as::<_, (i64, String)>(
+        "SELECT version, description FROM _sqlx_migrations ORDER BY version",
+    )
+    .fetch_all(pool)
+    .await
+    .expect("applied migrations should load")
+}
+
+#[tokio::test]
+async fn context_policy_thread_history_keeps_its_version_7() {
+    let sqlite_home = crate::runtime::test_support::unique_temp_dir();
+    tokio::fs::create_dir_all(&sqlite_home)
+        .await
+        .expect("sqlite home should be created");
+    let _cleanup = scopeguard::guard(sqlite_home.clone(), |sqlite_home| {
+        let _ = std::fs::remove_dir_all(sqlite_home);
+    });
+    let sqlite = crate::SqliteConfig::new_for_testing(sqlite_home.as_path().abs());
+    let context_pause = THREAD_HISTORY_MIGRATOR
+        .migrations
+        .iter()
+        .find(|migration| migration.version == 8)
+        .expect("context pause migration");
+    let mut released_migrations = THREAD_HISTORY_MIGRATOR
+        .migrations
+        .iter()
+        .filter(|migration| migration.version < 7)
+        .cloned()
+        .collect::<Vec<_>>();
+    released_migrations.push(Migration {
+        version: 7,
+        ..context_pause.clone()
+    });
+    let released_migrator = Migrator {
+        migrations: Cow::Owned(released_migrations),
+        ignore_missing: true,
+        locking: THREAD_HISTORY_MIGRATOR.locking,
+        table_name: THREAD_HISTORY_MIGRATOR.table_name.clone(),
+        create_schemas: THREAD_HISTORY_MIGRATOR.create_schemas.clone(),
+        no_tx: THREAD_HISTORY_MIGRATOR.no_tx,
+    };
+    let released_pool = sqlite
+        .open_thread_history_db(&released_migrator, /*telemetry_override*/ None)
+        .await
+        .expect("released context-policy migrations should apply");
+    released_pool.close().await;
+
+    let pool = crate::open_thread_history_db(&sqlite)
+        .await
+        .expect("current binaries should open released context-policy history");
+    assert_eq!(
+        applied_thread_history_migrations(&pool).await[6..],
+        [
+            (7, "context pause".to_string()),
+            (8, "thread item lifecycle timestamps".to_string()),
+        ]
+    );
+    sqlx::query(
+        "INSERT INTO thread_items (thread_id, turn_id, item_id, rollout_ordinal, created_at_ms, item_json, started_at_ms, completed_at_ms) VALUES ('thread-1', 'turn-1', 'item-1', 1, 100, '{}', 90, 100)",
+    )
+    .execute(&pool)
+    .await
+    .expect("lifecycle timestamps should be available");
+    sqlx::query(
+        "INSERT INTO thread_turns (thread_id, turn_id, rollout_ordinal, status, context_pause_json) VALUES ('thread-1', 'turn-1', 1, 'completed', '{}')",
+    )
+    .execute(&pool)
+    .await
+    .expect("context pauses should remain available");
+    pool.close().await;
+
+    let reopened = crate::open_thread_history_db(&sqlite)
+        .await
+        .expect("current binaries should reopen reconciled history");
+    reopened.close().await;
+    let released_pool = sqlite
+        .open_thread_history_db(&released_migrator, /*telemetry_override*/ None)
+        .await
+        .expect("released context-policy binaries should still open the history");
+    released_pool.close().await;
+}
+
+#[tokio::test]
+async fn new_thread_history_uses_upstream_version_7() {
+    let sqlite_home = crate::runtime::test_support::unique_temp_dir();
+    tokio::fs::create_dir_all(&sqlite_home)
+        .await
+        .expect("sqlite home should be created");
+    let _cleanup = scopeguard::guard(sqlite_home.clone(), |sqlite_home| {
+        let _ = std::fs::remove_dir_all(sqlite_home);
+    });
+    let sqlite = crate::SqliteConfig::new_for_testing(sqlite_home.as_path().abs());
+    let pool = crate::open_thread_history_db(&sqlite)
+        .await
+        .expect("new thread history should open");
+    assert_eq!(
+        applied_thread_history_migrations(&pool).await[6..],
+        [
+            (7, "thread item lifecycle timestamps".to_string()),
+            (8, "context pause".to_string()),
+        ]
+    );
+    pool.close().await;
+}

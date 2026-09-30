@@ -235,7 +235,8 @@ mod tests {
             git_info: None,
             name: None,
             turns: vec![Turn {
-                id: "turn-1".to_string(),
+                context_pause: None,
+                id:"turn-1".to_string(),
                 items,
                 items_view: TurnItemsView::Full,
                 status: TurnStatus::Completed,

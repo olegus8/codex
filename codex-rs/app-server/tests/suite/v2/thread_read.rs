@@ -1754,7 +1754,8 @@ async fn paginated_history_lists_and_legacy_reads_use_projected_turns_and_items(
         .await?;
 
     let expected_turn_1_full = Turn {
-        id: "turn-1".to_string(),
+        context_pause: None,
+        id:"turn-1".to_string(),
         items: vec![
             ThreadItem::UserMessage {
                 id: "user-1".to_string(),
@@ -1783,7 +1784,8 @@ async fn paginated_history_lists_and_legacy_reads_use_projected_turns_and_items(
         duration_ms: Some(10_000),
     };
     let expected_turn_2_full = Turn {
-        id: "turn-2".to_string(),
+        context_pause: None,
+        id:"turn-2".to_string(),
         items: vec![ThreadItem::UserMessage {
             id: "user-2".to_string(),
             client_id: None,
@@ -1946,7 +1948,8 @@ async fn paginated_history_lists_and_legacy_reads_use_projected_turns_and_items(
     assert_eq!(
         first_page.data,
         vec![Turn {
-            id: "turn-1".to_string(),
+            context_pause: None,
+            id:"turn-1".to_string(),
             items: vec![
                 ThreadItem::UserMessage {
                     id: "user-1".to_string(),
@@ -1983,7 +1986,8 @@ async fn paginated_history_lists_and_legacy_reads_use_projected_turns_and_items(
     assert_eq!(
         second_page.data,
         vec![Turn {
-            id: "turn-2".to_string(),
+            context_pause: None,
+            id:"turn-2".to_string(),
             items: Vec::new(),
             items_view: TurnItemsView::NotLoaded,
             status: TurnStatus::Interrupted,
@@ -2405,6 +2409,7 @@ fn paginated_turn_started(turn_id: &str) -> RolloutItem {
 
 fn paginated_turn_completed(turn_id: &str) -> RolloutItem {
     RolloutItem::EventMsg(EventMsg::TurnComplete(TurnCompleteEvent {
+        context_pause: None,
         turn_id: turn_id.to_string(),
         last_agent_message: None,
         error: None,

@@ -4,6 +4,62 @@ use serde_json::json;
 use tempfile::tempdir;
 
 #[test]
+fn context_policy_json_outcomes_are_distinct() {
+    let pause = json!({"usedTokens": 133000, "contextWindow": 190000, "thresholdPercent": 70});
+    for (status, context_pause, error) in [
+        ("completed", pause, serde_json::Value::Null),
+        (
+            "failed",
+            serde_json::Value::Null,
+            json!({
+                "message": "Context exhausted",
+                "codexErrorInfo": "contextWindowExceeded",
+                "additionalDetails": null,
+                "misalignment": null,
+            }),
+        ),
+    ] {
+        let notification = serde_json::from_value(json!({
+            "threadId": "thread-1",
+            "turn": {
+                "id": "turn-1", "items": [], "itemsView": "full",
+                "status": status, "error": error, "contextPause": context_pause,
+                "startedAt": null, "completedAt": null, "durationMs": null,
+            },
+        }))
+        .expect("turn completion");
+        let mut processor = EventProcessorWithJsonOutput::new(/*last_message_path*/ None);
+        let collected =
+            processor.collect_thread_events(ServerNotification::TurnCompleted(notification));
+        assert_eq!(collected.status, CodexStatus::InitiateShutdown);
+        let events = serde_json::to_value(collected.events).expect("serialize events");
+        if status == "completed" {
+            assert_eq!(
+                events,
+                json!([{
+                    "type": "turn.completed", "context_pause": {
+                        "used_tokens": 133000, "context_window": 190000, "threshold_percent": 70,
+                    },
+                    "usage": {
+                        "input_tokens": 0, "cached_input_tokens": 0,
+                        "cache_write_input_tokens": 0, "output_tokens": 0,
+                        "reasoning_output_tokens": 0,
+                    },
+                }])
+            );
+        } else {
+            assert_eq!(
+                events,
+                json!([{
+                    "type": "turn.failed",
+                    "error": {"message": "Context exhausted"},
+                }])
+            );
+        }
+    }
+}
+
+#[test]
 fn failed_turn_does_not_overwrite_output_last_message_file() {
     let tempdir = tempdir().expect("create tempdir");
     let output_path = tempdir.path().join("last-message.txt");
@@ -34,7 +90,8 @@ fn failed_turn_does_not_overwrite_output_last_message_file() {
         codex_app_server_protocol::TurnCompletedNotification {
             thread_id: "thread-1".to_string(),
             turn: codex_app_server_protocol::Turn {
-                id: "turn-1".to_string(),
+                context_pause: None,
+                id:"turn-1".to_string(),
                 items_view: codex_app_server_protocol::TurnItemsView::Full,
                 items: Vec::new(),
                 status: TurnStatus::Failed,

@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 
+use sqlx::migrate::Migration;
 use sqlx::migrate::Migrator;
 use sqlx_sqlite::SqlitePool;
 
@@ -115,6 +116,75 @@ WHERE version = ?
     .execute(pool)
     .await?;
     Ok(())
+}
+
+const ITEM_LIFECYCLE_THREAD_HISTORY_VERSION: i64 = 7;
+const CONTEXT_PAUSE_THREAD_HISTORY_VERSION: i64 = 8;
+
+/// Returns the thread-history migrator for a database migrated by an earlier context-policy
+/// release, which recorded the context-pause column as version 7.
+///
+/// Such a database keeps its history: versions 7 and 8 run swapped, so its recorded version 7
+/// validates and item lifecycle timestamps arrive as version 8. The earlier release still opens it.
+pub(crate) async fn context_pause_first_thread_history_migrator(
+    pool: &SqlitePool,
+    migrator: &Migrator,
+) -> anyhow::Result<Option<Migrator>> {
+    let find = |version| {
+        migrator
+            .migrations
+            .iter()
+            .find(|migration| migration.version == version)
+    };
+    let (Some(item_lifecycle), Some(context_pause)) = (
+        find(ITEM_LIFECYCLE_THREAD_HISTORY_VERSION),
+        find(CONTEXT_PAUSE_THREAD_HISTORY_VERSION),
+    ) else {
+        return Ok(None);
+    };
+    let migrations_table_exists = sqlx::query_scalar::<_, i64>(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = '_sqlx_migrations'",
+    )
+    .fetch_optional(pool)
+    .await?
+    .is_some();
+    if !migrations_table_exists {
+        return Ok(None);
+    }
+    let context_pause_first = sqlx::query_scalar::<_, i64>(
+        "SELECT 1 FROM _sqlx_migrations WHERE version = ? AND checksum = ?",
+    )
+    .bind(ITEM_LIFECYCLE_THREAD_HISTORY_VERSION)
+    .bind(context_pause.checksum.as_ref())
+    .fetch_optional(pool)
+    .await?
+    .is_some();
+    if !context_pause_first {
+        return Ok(None);
+    }
+    let migrations = migrator
+        .migrations
+        .iter()
+        .map(|migration| match migration.version {
+            ITEM_LIFECYCLE_THREAD_HISTORY_VERSION => Migration {
+                version: ITEM_LIFECYCLE_THREAD_HISTORY_VERSION,
+                ..context_pause.clone()
+            },
+            CONTEXT_PAUSE_THREAD_HISTORY_VERSION => Migration {
+                version: CONTEXT_PAUSE_THREAD_HISTORY_VERSION,
+                ..item_lifecycle.clone()
+            },
+            _ => migration.clone(),
+        })
+        .collect::<Vec<_>>();
+    Ok(Some(Migrator {
+        migrations: Cow::Owned(migrations),
+        ignore_missing: migrator.ignore_missing,
+        locking: migrator.locking,
+        no_tx: migrator.no_tx,
+        table_name: migrator.table_name.clone(),
+        create_schemas: migrator.create_schemas.clone(),
+    }))
 }
 
 #[cfg(test)]

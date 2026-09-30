@@ -75,6 +75,7 @@ pub(crate) struct SessionState {
     pub(crate) history: ContextManager,
     /// Cancels work bound to discarded history or a superseded Guardian evidence policy.
     pub(crate) history_reset: CancellationToken,
+    pub(crate) context_pause: crate::session::context_pause::ContextPauseState,
     pub(crate) latest_rate_limits: Option<RateLimitSnapshot>,
     pub(crate) latest_token_usage_record: Option<TokenUsageRecord>,
     pub(crate) server_reasoning_included: bool,
@@ -126,6 +127,7 @@ impl SessionState {
             base_instructions_provenance: None,
             history,
             history_reset: CancellationToken::new(),
+            context_pause: Default::default(),
             latest_rate_limits: None,
             latest_token_usage_record: None,
             server_reasoning_included: false,

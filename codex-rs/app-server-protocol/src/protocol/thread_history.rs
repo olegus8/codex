@@ -9,6 +9,7 @@ use crate::protocol::v2::CollabAgentState;
 use crate::protocol::v2::CollabAgentTool;
 use crate::protocol::v2::CollabAgentToolCallStatus;
 use crate::protocol::v2::CommandExecutionStatus;
+use crate::protocol::v2::ContextPause;
 use crate::protocol::v2::DynamicToolCallOutputContentItem;
 use crate::protocol::v2::DynamicToolCallStatus;
 use crate::protocol::v2::ImageReference;
@@ -111,6 +112,7 @@ pub struct ThreadHistoryTurnMetadata {
     pub started_at: Option<i64>,
     pub completed_at: Option<i64>,
     pub duration_ms: Option<i64>,
+    pub context_pause: Option<ContextPause>,
 }
 
 /// Incremental changes produced by opt-in `ThreadHistoryBuilder` handlers.
@@ -141,6 +143,7 @@ impl From<ThreadHistoryTurnMetadata> for Turn {
             started_at: value.started_at,
             completed_at: value.completed_at,
             duration_ms: value.duration_ms,
+            context_pause: value.context_pause,
         }
     }
 }
@@ -155,6 +158,7 @@ impl ThreadHistoryTurnMetadata {
             started_at: turn.started_at,
             completed_at: turn.completed_at,
             duration_ms: turn.duration_ms,
+            context_pause: turn.context_pause.clone(),
         }
     }
 }
@@ -1317,6 +1321,7 @@ impl ThreadHistoryBuilder {
             }
             turn.completed_at = payload.completed_at;
             turn.duration_ms = payload.duration_ms;
+            turn.context_pause = payload.context_pause.clone().map(Into::into);
             ThreadHistoryTurnMetadata::from_pending_turn(turn)
         };
 
@@ -1345,6 +1350,7 @@ impl ThreadHistoryBuilder {
             }
             turn.completed_at = payload.completed_at;
             turn.duration_ms = payload.duration_ms;
+            turn.context_pause = payload.context_pause.clone().map(Into::into);
             let changed_turn = ThreadHistoryTurnMetadata::from_pending_turn(turn);
             self.record_changed_turn(changed_turn);
             return;
@@ -1420,6 +1426,7 @@ impl ThreadHistoryBuilder {
             started_at: None,
             completed_at: None,
             duration_ms: None,
+            context_pause: None,
             opened_explicitly: false,
             saw_compaction: false,
             rollout_start_index: self.current_rollout_index,
@@ -1700,6 +1707,7 @@ struct PendingTurn {
     started_at: Option<i64>,
     completed_at: Option<i64>,
     duration_ms: Option<i64>,
+    context_pause: Option<ContextPause>,
     /// True when this turn originated from an explicit `turn_started`/`turn_complete`
     /// boundary, so we preserve it even if it has no renderable items.
     opened_explicitly: bool,
@@ -1736,6 +1744,7 @@ impl PendingTurn {
             started_at: self.started_at,
             completed_at: self.completed_at,
             duration_ms: self.duration_ms,
+            context_pause: self.context_pause.clone(),
         }
     }
 }
@@ -1751,6 +1760,7 @@ impl From<PendingTurn> for Turn {
             started_at: value.started_at,
             completed_at: value.completed_at,
             duration_ms: value.duration_ms,
+            context_pause: value.context_pause,
         }
     }
 }
@@ -1988,6 +1998,7 @@ mod tests {
                 review_output: None,
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 turn_id: "turn-1".into(),
                 started_at: None,
                 last_agent_message: None,
@@ -2050,6 +2061,7 @@ mod tests {
                 completed_at_ms: 0,
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 turn_id: "turn-1".into(),
                 started_at: None,
                 last_agent_message: None,
@@ -2212,6 +2224,7 @@ mod tests {
                 started_at_ms: 0,
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 turn_id: turn_id.to_string(),
                 started_at: None,
                 last_agent_message: None,
@@ -2267,6 +2280,7 @@ mod tests {
                 completed_at_ms: 1_000,
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 turn_id: turn_id.to_string(),
                 started_at: None,
                 last_agent_message: None,
@@ -2348,6 +2362,7 @@ mod tests {
                 completed_at_ms: 1_000,
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 turn_id: turn_id.to_string(),
                 started_at: None,
                 last_agent_message: None,
@@ -2465,6 +2480,7 @@ mod tests {
                 status: CoreExecCommandStatus::Completed,
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 turn_id: turn_id.to_string(),
                 started_at: None,
                 last_agent_message: None,
@@ -2568,6 +2584,7 @@ mod tests {
                 ..Default::default()
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 turn_id: turn_id.to_string(),
                 started_at: None,
                 last_agent_message: None,
@@ -2670,6 +2687,7 @@ mod tests {
                 saved_path: Some(test_path_buf("/tmp/ig_123.png").abs()),
             })),
             RolloutItem::EventMsg(EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 turn_id: "turn-image".into(),
                 started_at: None,
                 last_agent_message: None,
@@ -2685,7 +2703,8 @@ mod tests {
         assert_eq!(
             turns[0],
             Turn {
-                id: "turn-image".into(),
+                context_pause: None,
+                id:"turn-image".into(),
                 status: TurnStatus::Completed,
                 error: None,
                 started_at: None,
@@ -3059,6 +3078,7 @@ mod tests {
                 ..Default::default()
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 turn_id: "turn-a".into(),
                 started_at: None,
                 last_agent_message: None,
@@ -3730,6 +3750,7 @@ mod tests {
                 ..Default::default()
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 turn_id: "turn-a".into(),
                 started_at: None,
                 last_agent_message: None,
@@ -3795,6 +3816,7 @@ mod tests {
                 ..Default::default()
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 turn_id: "turn-a".into(),
                 started_at: None,
                 last_agent_message: None,
@@ -3842,6 +3864,7 @@ mod tests {
                 status: CoreExecCommandStatus::Completed,
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 turn_id: "turn-b".into(),
                 started_at: None,
                 last_agent_message: None,
@@ -3905,6 +3928,7 @@ mod tests {
                 ..Default::default()
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 turn_id: "turn-a".into(),
                 started_at: None,
                 last_agent_message: None,
@@ -3952,6 +3976,7 @@ mod tests {
                 status: CoreExecCommandStatus::Completed,
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 turn_id: "turn-b".into(),
                 started_at: None,
                 last_agent_message: None,
@@ -4036,6 +4061,7 @@ mod tests {
             Some(expected.clone())
         );
         builder.handle_event(&EventMsg::TurnComplete(TurnCompleteEvent {
+            context_pause: None,
             turn_id: "turn-1".into(),
             started_at: Some(100),
             last_agent_message: None,
@@ -4074,6 +4100,7 @@ mod tests {
             ..Default::default()
         }));
         let mut expected = ThreadHistoryTurnMetadata {
+            context_pause: None,
             turn_id: "turn-1".into(),
             root_turn_id: Some("root-turn".into()),
             error: None,
@@ -4089,6 +4116,7 @@ mod tests {
         assert_eq!(builder.active_turn_snapshot().unwrap().items.len(), 1);
 
         builder.handle_event(&EventMsg::TurnComplete(TurnCompleteEvent {
+            context_pause: None,
             turn_id: "turn-1".into(),
             started_at: Some(100),
             last_agent_message: None,
@@ -4264,6 +4292,7 @@ mod tests {
                 ..Default::default()
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 turn_id: "turn-a".into(),
                 started_at: None,
                 last_agent_message: None,
@@ -4289,6 +4318,7 @@ mod tests {
                 ..Default::default()
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 turn_id: "turn-a".into(),
                 started_at: None,
                 last_agent_message: None,
@@ -4305,6 +4335,7 @@ mod tests {
                 questions: None,
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 turn_id: "turn-b".into(),
                 started_at: None,
                 last_agent_message: None,
@@ -4362,6 +4393,7 @@ mod tests {
                 ..Default::default()
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 turn_id: "turn-a".into(),
                 started_at: Some(10),
                 last_agent_message: None,
@@ -4385,7 +4417,8 @@ mod tests {
             build_turns_from_rollout_items(&items),
             vec![
                 Turn {
-                    id: "turn-a".into(),
+                    context_pause: None,
+                    id:"turn-a".into(),
                     items_view: TurnItemsView::Full,
                     items: vec![ThreadItem::UserMessage {
                         id: "item-1".into(),
@@ -4410,7 +4443,8 @@ mod tests {
                     duration_ms: Some(10_000),
                 },
                 Turn {
-                    id: "turn-b".into(),
+                    context_pause: None,
+                    id:"turn-b".into(),
                     items_view: TurnItemsView::Full,
                     items: vec![ThreadItem::UserMessage {
                         id: "item-2".into(),
@@ -4450,6 +4484,7 @@ mod tests {
                 ..Default::default()
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 turn_id: "turn-a".into(),
                 started_at: None,
                 last_agent_message: None,
@@ -4529,6 +4564,7 @@ mod tests {
                 resume_metadata: None,
             }),
             RolloutItem::EventMsg(EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 turn_id: "turn-compact".into(),
                 started_at: None,
                 last_agent_message: None,
@@ -4543,7 +4579,8 @@ mod tests {
         assert_eq!(
             turns,
             vec![Turn {
-                id: "turn-compact".into(),
+                context_pause: None,
+                id:"turn-compact".into(),
                 status: TurnStatus::Completed,
                 error: None,
                 started_at: None,
@@ -4797,6 +4834,7 @@ mod tests {
                 ..Default::default()
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 turn_id: "turn-a".into(),
                 started_at: None,
                 last_agent_message: None,
@@ -4821,7 +4859,8 @@ mod tests {
         assert_eq!(
             turns[0],
             Turn {
-                id: "turn-a".into(),
+                context_pause: None,
+                id:"turn-a".into(),
                 status: TurnStatus::Completed,
                 error: None,
                 started_at: None,
@@ -4867,6 +4906,7 @@ mod tests {
                 }),
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 turn_id: "turn-a".into(),
                 started_at: None,
                 last_agent_message: None,
@@ -4920,6 +4960,7 @@ mod tests {
                 ..Default::default()
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 turn_id: "turn-a".into(),
                 started_at: Some(10),
                 last_agent_message: None,
@@ -4942,7 +4983,8 @@ mod tests {
         assert_eq!(
             build_turns_from_rollout_items(&items),
             vec![Turn {
-                id: "turn-a".into(),
+                context_pause: None,
+                id:"turn-a".into(),
                 items_view: TurnItemsView::Full,
                 items: vec![ThreadItem::UserMessage {
                     id: "item-1".into(),
@@ -4992,6 +5034,7 @@ mod tests {
             })),
             RolloutItem::ResponseItem(hook_prompt.into()),
             RolloutItem::EventMsg(EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 turn_id: "turn-a".into(),
                 started_at: None,
                 last_agent_message: None,
@@ -5073,6 +5116,7 @@ mod tests {
                 collaboration_mode_kind: Default::default(),
             })),
             RolloutItem::EventMsg(EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 turn_id: "turn-a".into(),
                 started_at: None,
                 last_agent_message: None,
@@ -5133,6 +5177,7 @@ mod tests {
                 .into(),
             ),
             RolloutItem::EventMsg(EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 turn_id: "turn-a".into(),
                 started_at: None,
                 last_agent_message: None,
@@ -5179,7 +5224,8 @@ mod tests {
                     completed_at_ms: None,
                 }],
                 changed_turns: vec![ThreadHistoryTurnMetadata {
-                    turn_id: "rollout-0".into(),
+                    context_pause: None,
+                    turn_id:"rollout-0".into(),
                     root_turn_id: None,
                     status: TurnStatus::Completed,
                     error: None,
@@ -5287,7 +5333,8 @@ mod tests {
             ThreadHistoryChangeSet {
                 changed_items: Vec::new(),
                 changed_turns: vec![ThreadHistoryTurnMetadata {
-                    turn_id: "turn-a".into(),
+                    context_pause: None,
+                    turn_id:"turn-a".into(),
                     root_turn_id: Some("root-turn".into()),
                     status: TurnStatus::InProgress,
                     error: None,
@@ -5311,6 +5358,7 @@ mod tests {
         )));
         let complete_changes = builder.handle_rollout_item_with_changes(&RolloutItem::EventMsg(
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 turn_id: "turn-a".into(),
                 started_at: None,
                 last_agent_message: None,
@@ -5326,7 +5374,8 @@ mod tests {
             ThreadHistoryChangeSet {
                 changed_items: Vec::new(),
                 changed_turns: vec![ThreadHistoryTurnMetadata {
-                    turn_id: "turn-a".into(),
+                    context_pause: None,
+                    turn_id:"turn-a".into(),
                     root_turn_id: Some("root-turn".into()),
                     status: TurnStatus::Completed,
                     error: None,
@@ -5374,7 +5423,8 @@ mod tests {
                     completed_at_ms: None,
                 }],
                 changed_turns: vec![ThreadHistoryTurnMetadata {
-                    turn_id: "rollout-0".into(),
+                    context_pause: None,
+                    turn_id:"rollout-0".into(),
                     root_turn_id: None,
                     status: TurnStatus::Completed,
                     error: None,
@@ -5400,6 +5450,7 @@ mod tests {
                 collaboration_mode_kind: Default::default(),
             })),
             RolloutItem::EventMsg(EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 turn_id: "turn-a".into(),
                 started_at: None,
                 last_agent_message: None,
@@ -5415,7 +5466,8 @@ mod tests {
             ThreadHistoryChangeSet {
                 changed_items: Vec::new(),
                 changed_turns: vec![ThreadHistoryTurnMetadata {
-                    turn_id: "turn-a".into(),
+                    context_pause: None,
+                    turn_id:"turn-a".into(),
                     root_turn_id: Some("root-turn".into()),
                     status: TurnStatus::Completed,
                     error: None,

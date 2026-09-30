@@ -81,6 +81,12 @@ impl TurnStartKind {
     }
 }
 
+fn context_paused_error() -> CodexErr {
+    CodexErr::InvalidRequest(
+        "Context paused; explicit user input is required to continue.".to_string(),
+    )
+}
+
 /// Thread settings and start-only options prepared before Core knows whether
 /// turn input starts or steers.
 ///
@@ -169,6 +175,9 @@ impl PreparedTurnInputSettings {
         let Some((turn_context, settings_snapshot)) = turn_context else {
             return Ok(None);
         };
+        if kind == TurnStartKind::User {
+            session.state.lock().await.context_pause.waiting_for_user = false;
+        }
         if let Some(turn_trigger) = turn_trigger {
             turn_context
                 .turn_metadata_state
@@ -301,6 +310,11 @@ async fn start_or_steer(
         }
     };
     let settings = PreparedTurnInputSettings::prepare(session, thread_settings, start).await?;
+    if super::context_pause::waiting_for_user(session).await
+        && !matches!(&input, SubmittedTurnInput::UserInput { content, .. } if !content.is_empty())
+    {
+        return Err(context_paused_error());
+    }
     match session
         .steer_input(
             &mut input,
@@ -392,7 +406,12 @@ async fn start_if_idle(
         ..
     } = request;
     let origin = UserInputOrigin::from_turn_trigger(start.turn_trigger.as_deref());
-    if session.input_queue.has_trigger_turn_mailbox_items().await {
+    // A paused thread admits only explicit user input, ahead of any pending triggers.
+    let context_paused = super::context_pause::waiting_for_user(session).await;
+    if context_paused && kind != TurnStartKind::User {
+        return Err(context_paused_error());
+    }
+    if !context_paused && session.input_queue.has_trigger_turn_mailbox_items().await {
         return Ok(TurnInputSubmission::NotSubmitted {
             reason: NotSubmittedReason::PendingTriggerTurn,
         });
@@ -446,7 +465,7 @@ async fn start_if_idle(
         Arc::clone(&active_turn.turn_state)
     };
 
-    if session.input_queue.has_trigger_turn_mailbox_items().await {
+    if !context_paused && session.input_queue.has_trigger_turn_mailbox_items().await {
         session.clear_reserved_idle_turn(&turn_state).await;
         session.maybe_start_turn_for_pending_work().await;
         return Ok(TurnInputSubmission::NotSubmitted {

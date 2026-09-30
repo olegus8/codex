@@ -273,7 +273,8 @@ async fn replayed_turn_completions_do_not_start_live_billing_refreshes() {
 
             chat.replay_thread_turns(
                 vec![Turn {
-                    id: "replayed-turn".to_string(),
+                    context_pause: None,
+                    id:"replayed-turn".to_string(),
                     items: Vec::new(),
                     items_view: TurnItemsView::NotLoaded,
                     status: status.clone(),

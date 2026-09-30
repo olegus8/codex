@@ -41,7 +41,8 @@ fn turn_completed_notification(turn_id: &str, status: TurnStatus) -> ServerNotif
     ServerNotification::TurnCompleted(TurnCompletedNotification {
         thread_id: "thread-1".to_string(),
         turn: Turn {
-            id: turn_id.to_string(),
+            context_pause: None,
+            id:turn_id.to_string(),
             items: Vec::new(),
             items_view: Default::default(),
             status,

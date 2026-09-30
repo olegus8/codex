@@ -35,6 +35,7 @@ use crate::responses_retry::ResponsesStreamRetryState;
 use crate::responses_retry::handle_response_stream_error;
 use crate::session::PreviousTurnSettings;
 use crate::session::TurnInput;
+use crate::session::context_window::automatic_compaction_enabled;
 use crate::session::daemon_recovery::RecordedTurnInput;
 use crate::session::session::Session;
 use crate::session::step_context::StepContext;
@@ -510,6 +511,22 @@ pub(crate) async fn run_turn(
             sess.record_reasoning_effort_override(step_context.as_ref())
                 .await;
 
+            if !automatic_compaction_enabled(&turn_context) {
+                let status = super::context_window::usable_context_token_status(
+                    sess.as_ref(),
+                    turn_context.as_ref(),
+                    &step_context.settings.model_info,
+                )
+                .await;
+                super::context_window::publish_usage(&sess, &turn_context, &status).await;
+                if status.full_context_window_limit_reached {
+                    return Err(CodexErr::ContextWindowExceeded);
+                }
+                if super::context_pause::maybe_pause(&sess, &turn_context, &status).await {
+                    return Ok(None);
+                }
+            }
+
             // Construct the input that we will send to the model.
             let sampling_request_input: Vec<ResponseItem> = async {
                 sess.clone_history()
@@ -529,10 +546,12 @@ pub(crate) async fn run_turn(
                 cancellation_token.child_token(),
             )
             .await
+            .map(Some)
         }
         .await;
         match sampling_request_result {
-            Ok((sampling_request_output, sampling_request_input)) => {
+            Ok(None) => break,
+            Ok(Some((sampling_request_output, sampling_request_input))) => {
                 guardian_budget_compacted = false;
                 let SamplingRequestResult {
                     needs_follow_up: model_needs_follow_up,
@@ -562,6 +581,11 @@ pub(crate) async fn run_turn(
                 .instrument(trace_span!("run_turn.collect_post_sampling_state"))
                 .await;
                 let needs_follow_up = model_needs_follow_up || has_pending_input;
+                super::context_window::publish_usage(&sess, &turn_context, &token_status).await;
+                if super::context_pause::maybe_pause(&sess, &turn_context, &token_status).await {
+                    last_agent_message = sampling_request_last_agent_message;
+                    break;
+                }
                 let token_limit_reached = token_status.token_limit_reached;
 
                 trace!(
@@ -596,9 +620,12 @@ pub(crate) async fn run_turn(
                     );
                 }
 
+                let automatic_compaction = automatic_compaction_enabled(&turn_context);
                 let should_roll_over = needs_follow_up
+                    && automatic_compaction
                     && (sess.take_new_context_window_request().await || token_limit_reached);
-                let allow_auto_compact_fallback = !should_roll_over && !token_limit_reached;
+                let allow_auto_compact_fallback =
+                    automatic_compaction && !should_roll_over && !token_limit_reached;
                 super::token_budget::maybe_record(
                     sess.as_ref(),
                     turn_context.as_ref(),
@@ -707,7 +734,8 @@ pub(crate) async fn run_turn(
                     // Token-budget resets do not summarize, so preserve their existing rollover
                     // policy. Keep summarizing compaction in this task to serialize history updates.
                     let config = &turn_context.config;
-                    if config.model_post_turn_compact_threshold_percent > 0
+                    if automatic_compaction
+                        && config.model_post_turn_compact_threshold_percent > 0
                         && !config.features.enabled(Feature::TokenBudget)
                         && super::context_window::context_window_token_status(
                             sess.as_ref(),
@@ -1281,6 +1309,9 @@ async fn run_pre_sampling_compact(
     client_session: &mut ModelClientSession,
     cancellation_token: &CancellationToken,
 ) -> CodexResult<()> {
+    if !automatic_compaction_enabled(turn_context) {
+        return Ok(());
+    }
     maybe_run_previous_model_inline_compact(sess, turn_context, client_session, cancellation_token)
         .await?;
     let token_status =
