@@ -2149,9 +2149,24 @@ pub struct SafetyBufferingEvent {
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]
 pub struct ContextCompactedEvent;
 
+/// A once-per-thread pause measured against the usable context window.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, JsonSchema, TS)]
+pub struct ContextPause {
+    pub thread_id: ThreadId,
+    #[ts(type = "number")]
+    pub used_tokens: i64,
+    #[ts(type = "number")]
+    pub context_window: i64,
+    pub threshold_percent: u8,
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]
 pub struct TurnCompleteEvent {
     pub turn_id: String,
+    /// Autonomous processing paused; a later user message may continue the thread.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub context_pause: Option<ContextPause>,
     pub last_agent_message: Option<String>,
     /// Terminal error details when the turn completed unsuccessfully.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -2274,6 +2289,10 @@ pub struct TokenUsageRecord {
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
 pub struct TokenUsageInfo {
+    /// Runtime accounting when automatic compaction is disabled.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub context_window_usage: Option<ContextWindowUsage>,
     pub total_token_usage: TokenUsage,
     pub last_token_usage: TokenUsage,
     // TODO(aibrahim): make this not optional
@@ -2294,6 +2313,7 @@ impl TokenUsageInfo {
         let mut info = match info {
             Some(info) => info.clone(),
             None => Self {
+                context_window_usage: None,
                 total_token_usage: TokenUsage::default(),
                 last_token_usage: TokenUsage::default(),
                 model_context_window,
@@ -2309,6 +2329,7 @@ impl TokenUsageInfo {
     }
 
     pub fn append_last_usage(&mut self, last: &TokenUsage) {
+        self.context_window_usage = None;
         self.total_token_usage.add_assign(last);
         self.last_token_usage = last.clone();
     }
@@ -2330,6 +2351,7 @@ impl TokenUsageInfo {
 
     pub fn full_context_window(context_window: i64) -> Self {
         let mut info = Self {
+            context_window_usage: None,
             total_token_usage: TokenUsage::default(),
             last_token_usage: TokenUsage::default(),
             model_context_window: Some(context_window),
@@ -2343,6 +2365,15 @@ impl TokenUsageInfo {
 pub struct TokenCountEvent {
     pub info: Option<TokenUsageInfo>,
     pub rate_limits: Option<RateLimitSnapshot>,
+}
+
+/// Active context and the usable limit used by the runtime guard.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, JsonSchema, TS)]
+pub struct ContextWindowUsage {
+    #[ts(type = "number")]
+    pub used_tokens: i64,
+    #[ts(type = "number")]
+    pub context_window: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize, JsonSchema, TS)]
@@ -6411,6 +6442,10 @@ mod tests {
     #[test]
     fn token_usage_info_new_or_append_updates_context_window_when_provided() {
         let initial = Some(TokenUsageInfo {
+            context_window_usage: Some(ContextWindowUsage {
+                used_tokens: 100_000,
+                context_window: 258_400,
+            }),
             total_token_usage: TokenUsage::default(),
             last_token_usage: TokenUsage::default(),
             model_context_window: Some(258_400),
@@ -6429,11 +6464,13 @@ mod tests {
             .expect("new_or_append should return info");
 
         assert_eq!(info.model_context_window, Some(128_000));
+        assert_eq!(info.context_window_usage, None);
     }
 
     #[test]
     fn token_usage_info_new_or_append_preserves_context_window_when_not_provided() {
         let initial = Some(TokenUsageInfo {
+            context_window_usage: None,
             total_token_usage: TokenUsage::default(),
             last_token_usage: TokenUsage::default(),
             model_context_window: Some(258_400),

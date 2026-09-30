@@ -456,6 +456,9 @@ pub struct StoredTurn {
     pub completed_at: Option<i64>,
     /// Duration between turn start and completion in milliseconds, if known.
     pub duration_ms: Option<i64>,
+    /// Context pause reached by this turn, if any.
+    #[serde(default)]
+    pub context_pause: Option<codex_app_server_protocol::ContextPause>,
 }
 
 /// A page of stored turns.

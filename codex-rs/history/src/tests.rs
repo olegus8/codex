@@ -578,6 +578,7 @@ fn compacted_replacement_history_stores_metadata_in_an_aligned_sidecar() -> Resu
 #[test]
 fn compacted_resume_metadata_presence_round_trips_empty_values() -> Result<()> {
     let resume_metadata = CompactionResumeMetadata {
+        context_pause: None,
         multi_agent_version: None,
         last_started_turn_id: None,
         previous_turn_settings: None,
@@ -688,6 +689,7 @@ fn compacted_metadata_remains_compatible_with_legacy_response_item_readers() -> 
         compaction_response_id: None,
         latest_token_usage_record: None,
         resume_metadata: Some(CompactionResumeMetadata {
+            context_pause: None,
             multi_agent_version: Some(MultiAgentVersion::V2),
             last_started_turn_id: Some("turn-1".to_string()),
             previous_turn_settings: None,

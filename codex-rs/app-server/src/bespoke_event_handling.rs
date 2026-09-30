@@ -169,6 +169,7 @@ pub(crate) async fn apply_bespoke_event_handling(
                     started_at: payload.started_at,
                     completed_at: None,
                     duration_ms: None,
+                    context_pause: None,
                 });
                 turn.items.clear();
                 turn.items_view = TurnItemsView::NotLoaded;
@@ -1316,6 +1317,7 @@ struct TurnCompletionMetadata {
     started_at: Option<i64>,
     completed_at: Option<i64>,
     duration_ms: Option<i64>,
+    context_pause: Option<codex_app_server_protocol::ContextPause>,
 }
 
 async fn emit_turn_completed_with_status(
@@ -1339,6 +1341,7 @@ async fn emit_turn_completed_with_status(
             started_at: turn_completion_metadata.started_at,
             completed_at: turn_completion_metadata.completed_at,
             duration_ms: turn_completion_metadata.duration_ms,
+            context_pause: turn_completion_metadata.context_pause,
         },
     };
     outgoing
@@ -1524,6 +1527,7 @@ async fn handle_turn_complete(
             started_at: turn_summary.started_at,
             completed_at: turn_complete_event.completed_at,
             duration_ms: turn_complete_event.duration_ms,
+            context_pause: turn_complete_event.context_pause.map(Into::into),
         },
         outgoing,
     )
@@ -1554,6 +1558,7 @@ async fn handle_turn_interrupted(
             started_at: turn_summary.started_at,
             completed_at: turn_aborted_event.completed_at,
             duration_ms: turn_aborted_event.duration_ms,
+            context_pause: None,
         },
         outgoing,
     )
@@ -2179,6 +2184,7 @@ mod tests {
 
     fn turn_complete_event(turn_id: &str) -> TurnCompleteEvent {
         TurnCompleteEvent {
+            context_pause: None,
             turn_id: turn_id.to_string(),
             started_at: None,
             last_agent_message: None,
@@ -3654,6 +3660,7 @@ mod tests {
         );
 
         let info = TokenUsageInfo {
+            context_window_usage: None,
             total_token_usage: TokenUsage {
                 input_tokens: 100,
                 cached_input_tokens: 25,

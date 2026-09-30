@@ -81,6 +81,12 @@ impl TurnStartKind {
     }
 }
 
+fn context_paused_error() -> CodexErr {
+    CodexErr::InvalidRequest(
+        "Context paused; explicit user input is required to continue.".to_string(),
+    )
+}
+
 /// Thread settings and start-only options prepared before Core knows whether
 /// turn input starts or steers.
 ///
@@ -169,6 +175,9 @@ impl PreparedTurnInputSettings {
         let Some((turn_context, settings_snapshot)) = turn_context else {
             return Ok(None);
         };
+        if kind == TurnStartKind::User {
+            session.state.lock().await.context_pause.waiting_for_user = false;
+        }
         if let Some(turn_trigger) = turn_trigger {
             turn_context
                 .turn_metadata_state
@@ -301,6 +310,11 @@ async fn start_or_steer(
         }
     };
     let settings = PreparedTurnInputSettings::prepare(session, thread_settings, start).await?;
+    if super::context_pause::waiting_for_user(session).await
+        && !matches!(&input, SubmittedTurnInput::UserInput { content, .. } if !content.is_empty())
+    {
+        return Err(context_paused_error());
+    }
     match session
         .steer_input(
             &mut input,
@@ -313,6 +327,8 @@ async fn start_or_steer(
         .await
     {
         Ok(turn_id) => {
+            // Explicit user input accepted into a running turn also answers a pause.
+            session.state.lock().await.context_pause.waiting_for_user = false;
             settings.apply_steered(session, submission_id).await?;
             Ok(TurnInputSubmission::Steered { turn_id })
         }
@@ -392,6 +408,10 @@ async fn start_if_idle(
         ..
     } = request;
     let origin = UserInputOrigin::from_turn_trigger(start.turn_trigger.as_deref());
+    // Idle starts are unattended; a paused thread resumes only through start-or-steer.
+    if super::context_pause::waiting_for_user(session).await {
+        return Err(context_paused_error());
+    }
     if session.input_queue.has_trigger_turn_mailbox_items().await {
         return Ok(TurnInputSubmission::NotSubmitted {
             reason: NotSubmittedReason::PendingTriggerTurn,
@@ -538,6 +558,8 @@ async fn steer(
             "only user input can steer a turn".to_string(),
         ));
     }
+    let answers_pause =
+        matches!(&input, SubmittedTurnInput::UserInput { content, .. } if !content.is_empty());
     let settings = PreparedTurnInputSettings::prepare(session, thread_settings, start).await?;
     match session
         .steer_input(
@@ -551,6 +573,9 @@ async fn steer(
         .await
     {
         Ok(turn_id) => {
+            if answers_pause {
+                session.state.lock().await.context_pause.waiting_for_user = false;
+            }
             settings.apply_steered(session, submission_id).await?;
             Ok(TurnInputSubmission::Steered { turn_id })
         }

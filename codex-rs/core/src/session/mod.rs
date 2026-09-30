@@ -228,6 +228,7 @@ use codex_protocol::error::Result as CodexResult;
 use codex_protocol::exec_output::StreamOutput;
 
 mod code_mode_warning;
+pub(crate) mod context_pause;
 pub(crate) mod context_window;
 mod daemon_recovery;
 mod environment;
@@ -359,6 +360,7 @@ use codex_protocol::protocol::ApplyPatchApprovalRequestEvent;
 use codex_protocol::protocol::AskForApproval;
 use codex_protocol::protocol::CodexErrorInfo;
 use codex_protocol::protocol::DeprecationNoticeEvent;
+use codex_protocol::protocol::ErrorEvent;
 use codex_protocol::protocol::Event;
 use codex_protocol::protocol::EventMsg;
 use codex_protocol::protocol::ExecApprovalRequestEvent;
@@ -1557,6 +1559,8 @@ impl Session {
             InitialHistory::Resumed(resumed_history) => {
                 let turn_context = self.new_default_turn().await;
                 let rollout_items = resumed_history.history;
+                self.state.lock().await.context_pause =
+                    context_pause::ContextPauseState::restore(self.thread_id, &rollout_items);
                 if matches!(
                     rollout_items.iter().rev().find_map(|item| match item {
                         RolloutItem::EventMsg(event) => agent_status_from_event(event),
@@ -2322,7 +2326,7 @@ impl Session {
 
     /// Persist the event to rollout and send it to clients.
     pub(crate) async fn send_event(&self, turn_context: &TurnContext, msg: EventMsg) {
-        let legacy_source = msg.clone();
+        let mut legacy_source = msg.clone();
         if let EventMsg::Error(error) = &legacy_source
             && error
                 .codex_error_info
@@ -2363,7 +2367,22 @@ impl Session {
                 .analytics_events_client
                 .track_guardian_session_event(self.thread_id, &event);
         }
-        self.send_event_raw(event).await;
+        if let Some(error) = self
+            .send_event_raw_with_persistence(event, /*persist*/ true)
+            .await
+        {
+            // An unsaved pause did not take effect.
+            self.state.lock().await.context_pause = Default::default();
+            turn_context
+                .terminal_error
+                .lock()
+                .await
+                .replace(error.clone());
+            if let EventMsg::TurnComplete(completed) = &mut legacy_source {
+                completed.context_pause = None;
+                completed.error = Some(error);
+            }
+        }
         self.maybe_notify_parent_of_terminal_turn(turn_context, &legacy_source)
             .await;
         self.maybe_mirror_event_text_to_realtime(&legacy_source)
@@ -2503,7 +2522,8 @@ impl Session {
     }
 
     pub(crate) async fn send_event_raw(&self, event: Event) {
-        self.send_event_raw_with_persistence(event, /*persist*/ true)
+        let _ = self
+            .send_event_raw_with_persistence(event, /*persist*/ true)
             .await;
     }
 
@@ -2517,10 +2537,15 @@ impl Session {
                 true
             }
         };
-        self.send_event_raw_with_persistence(event, persist).await;
+        let _ = self.send_event_raw_with_persistence(event, persist).await;
     }
 
-    async fn send_event_raw_with_persistence(&self, event: Event, persist: bool) {
+    /// Returns the error delivered in place of a context pause that could not be saved.
+    async fn send_event_raw_with_persistence(
+        &self,
+        mut event: Event,
+        persist: bool,
+    ) -> Option<ErrorEvent> {
         let flush_guardian_completion = persist
             && matches!(event.msg, EventMsg::TurnComplete(_))
             && self.is_private_guardian_reviewer().await;
@@ -2551,7 +2576,21 @@ impl Session {
             warn!("failed to persist realtime history: {error}");
         }
         // Persist the event into rollout storage; the store applies its persistence policy.
-        if persist {
+        let mut persistence_error = None;
+        if persist
+            && matches!(&event.msg, EventMsg::TurnComplete(done) if done.context_pause.is_some())
+        {
+            if let Err(error) = context_pause::persist_completion(self, &event.msg).await {
+                let error =
+                    CodexErr::Fatal(format!("Could not persist the context pause: {error}"))
+                        .to_error_event(/*message_prefix*/ None);
+                if let EventMsg::TurnComplete(completed) = &mut event.msg {
+                    completed.context_pause = None;
+                    completed.error = Some(error.clone());
+                }
+                persistence_error = Some(error);
+            }
+        } else if persist {
             let rollout_items = vec![RolloutItem::EventMsg(event.msg.clone())];
             self.persist_rollout_items(&rollout_items).await;
         }
@@ -2569,6 +2608,7 @@ impl Session {
             warn!("failed to flush completed Guardian review: {err}");
         }
         self.deliver_event_raw(event).await;
+        persistence_error
     }
 
     async fn deliver_event_raw(&self, event: Event) {
@@ -4179,6 +4219,7 @@ impl Session {
                     multi_agent_version: self.multi_agent_version(),
                     last_started_turn_id: state.last_started_turn_id.clone(),
                     previous_turn_settings: state.previous_turn_settings(),
+                    context_pause: state.context_pause.checkpoint(self.thread_id),
                 }),
             }
         };
@@ -4854,6 +4895,7 @@ impl Session {
         {
             let mut state = self.state.lock().await;
             let mut info = state.token_info().unwrap_or(TokenUsageInfo {
+                context_window_usage: None,
                 total_token_usage: TokenUsage::default(),
                 last_token_usage: TokenUsage::default(),
                 model_context_window: None,
@@ -4918,6 +4960,13 @@ impl Session {
     }
 
     pub(crate) async fn send_token_count_event(&self, turn_context: &TurnContext) {
+        if !context_window::automatic_compaction_enabled(turn_context) {
+            let status = context_window::context_window_token_status(self, turn_context).await;
+            if status.full_context_window_limit.is_some() {
+                context_window::publish_usage(self, turn_context, &status).await;
+                return;
+            }
+        }
         let (info, rate_limits) = {
             let state = self.state.lock().await;
             state.token_info_and_rate_limits()
@@ -4930,6 +4979,13 @@ impl Session {
         if let Some(context_window) = turn_context.model_context_window() {
             let mut state = self.state.lock().await;
             state.set_token_usage_full(context_window);
+            // Keep provider-reported exhaustion full even after earlier usage.
+            if !context_window::automatic_compaction_enabled(turn_context)
+                && let Some(mut info) = state.token_info()
+            {
+                info.last_token_usage.total_tokens = context_window;
+                state.set_token_info(Some(info));
+            }
         }
         self.send_token_count_event(turn_context).await;
     }

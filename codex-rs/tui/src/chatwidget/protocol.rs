@@ -413,6 +413,9 @@ impl ChatWidget {
         self.thread_usage.replaying_turn_completion = replay_kind.is_some();
         match notification.turn.status {
             TurnStatus::Completed => {
+                if notification.turn.context_pause.is_some() {
+                    self.input_queue.context_input_required = true;
+                }
                 let last_agent_message =
                     notification
                         .turn
@@ -464,6 +467,9 @@ impl ChatWidget {
                     completion,
                     replay_kind.is_some(),
                 );
+                if let Some(pause) = &notification.turn.context_pause {
+                    self.show_context_pause(pause);
+                }
             }
             TurnStatus::Interrupted => {
                 if replay_kind.is_none() {
@@ -530,6 +536,13 @@ impl ChatWidget {
         replay_kind: Option<ReplayKind>,
     ) {
         self.restore_realtime_transcripts_before_turn(&notification.turn_id);
+        // A review's own prompt does not answer a context pause.
+        if replay_kind.is_none()
+            && !self.review.is_review_mode
+            && matches!(notification.item, ThreadItem::UserMessage { .. })
+        {
+            self.input_queue.context_input_required = false;
+        }
         match notification.item {
             ThreadItem::UserMessage { content, .. } if replay_kind.is_none() => {
                 self.note_realtime_user_item_started(&notification.turn_id, &content);

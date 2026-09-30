@@ -94,6 +94,7 @@ pub(super) async fn completed_history_app(
             })
         }));
         events.push(EventMsg::TurnComplete(TurnCompleteEvent {
+            context_pause: None,
             turn_id,
             last_agent_message: Some(format!("{name} answer")),
             error: None,

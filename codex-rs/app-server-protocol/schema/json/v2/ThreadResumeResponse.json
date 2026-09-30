@@ -470,6 +470,30 @@
       ],
       "type": "string"
     },
+    "ContextPause": {
+      "description": "Pauses once per thread until explicit user input.",
+      "properties": {
+        "contextWindow": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "thresholdPercent": {
+          "format": "uint8",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "usedTokens": {
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "contextWindow",
+        "thresholdPercent",
+        "usedTokens"
+      ],
+      "type": "object"
+    },
     "DynamicToolCallOutputContentItem": {
       "oneOf": [
         {
@@ -2620,6 +2644,18 @@
             "integer",
             "null"
           ]
+        },
+        "contextPause": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ContextPause"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Autonomous processing paused at the context threshold until explicit user input."
         },
         "durationMs": {
           "description": "Duration between turn start and completion in milliseconds, if known.",

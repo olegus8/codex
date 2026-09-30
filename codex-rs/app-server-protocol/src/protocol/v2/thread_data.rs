@@ -1,4 +1,5 @@
 use super::CodexErrorInfo;
+use super::ContextPause;
 use super::ThreadEnvironment;
 use super::ThreadItem;
 use super::ThreadStatus;
@@ -403,6 +404,9 @@ pub struct Turn {
     /// Duration between turn start and completion in milliseconds, if known.
     #[ts(type = "number | null")]
     pub duration_ms: Option<i64>,
+    /// Autonomous processing paused at the context threshold until explicit user input.
+    #[serde(default)]
+    pub context_pause: Option<ContextPause>,
 }
 
 #[derive(Default, Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, JsonSchema, TS)]

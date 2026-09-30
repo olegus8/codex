@@ -6,6 +6,7 @@
 )]
 
 use crate::DbTelemetry;
+use crate::migrations::context_pause_first_thread_history_migrator;
 use crate::migrations::repair_legacy_recency_migration_version;
 use crate::runtime::RuntimeDbInitError;
 use crate::telemetry;
@@ -274,6 +275,12 @@ impl SqliteConfig {
         let migrate_result = async {
             if matches!(spec.kind, DbKind::State) {
                 repair_legacy_recency_migration_version(&pool, migrator).await?;
+            }
+            if matches!(spec.kind, DbKind::ThreadHistory)
+                && let Some(migrator) =
+                    context_pause_first_thread_history_migrator(&pool, migrator).await?
+            {
+                return migrator.run(&pool).await.map_err(anyhow::Error::from);
             }
             migrator.run(&pool).await.map_err(anyhow::Error::from)
         }

@@ -192,7 +192,11 @@ impl ChatWidget {
         let had_pending_steers = !self.input_queue.pending_steers.is_empty();
         self.refresh_pending_input_preview();
 
-        if !from_replay && !self.has_queued_follow_up_messages() && !had_pending_steers {
+        if !from_replay
+            && !self.input_queue.context_input_required
+            && !self.has_queued_follow_up_messages()
+            && !had_pending_steers
+        {
             self.maybe_prompt_plan_implementation();
         }
         // Keep this flag for replayed completion events so a subsequent live TurnComplete can
@@ -481,7 +485,19 @@ impl ChatWidget {
         } else {
             self.take_question_drafts()
         };
-        if codex_error_info == Some(AppServerCodexErrorInfo::MisalignmentPolicyViolation) {
+        if codex_error_info == Some(AppServerCodexErrorInfo::ContextWindowExceeded)
+            && self
+                .token_info
+                .as_ref()
+                .is_some_and(|info| info.context_window_usage.is_some())
+        {
+            // Without automatic compaction, exhaustion ends the thread's autonomous work.
+            self.input_queue.context_input_required = true;
+            self.on_error(
+                "Context exhausted. History is preserved. Start a new session to continue."
+                    .to_string(),
+            );
+        } else if codex_error_info == Some(AppServerCodexErrorInfo::MisalignmentPolicyViolation) {
             self.on_misalignment_policy_violation();
         } else if codex_error_info
             .as_ref()

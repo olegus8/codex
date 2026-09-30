@@ -217,6 +217,7 @@ async fn fork_version_stops_before_older_segments_once_resolved() {
             unreachable!();
         };
         compacted.resume_metadata = Some(codex_rollout::CompactionResumeMetadata {
+            context_pause: None,
             multi_agent_version: Some(MultiAgentVersion::V2),
             last_started_turn_id: None,
             previous_turn_settings: None,
@@ -627,6 +628,7 @@ fn turn_started(turn_id: &str) -> RolloutItem {
 
 fn turn_complete(turn_id: &str) -> RolloutItem {
     RolloutItem::EventMsg(EventMsg::TurnComplete(TurnCompleteEvent {
+        context_pause: None,
         turn_id: turn_id.to_string(),
         last_agent_message: None,
         error: None,

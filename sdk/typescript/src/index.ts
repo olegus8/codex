@@ -3,6 +3,7 @@ export type {
   ThreadStartedEvent,
   TurnStartedEvent,
   TurnCompletedEvent,
+  ContextPause,
   TurnFailedEvent,
   ItemStartedEvent,
   ItemUpdatedEvent,

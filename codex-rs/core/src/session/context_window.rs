@@ -3,6 +3,17 @@ use super::turn_context::TurnContext;
 use crate::config::Config;
 use codex_protocol::config_types::AutoCompactTokenLimitScope;
 use codex_protocol::openai_models::ModelInfo;
+use codex_protocol::protocol::ContextWindowUsage;
+use codex_protocol::protocol::EventMsg;
+use codex_protocol::protocol::TokenCountEvent;
+use codex_protocol::protocol::TokenUsage;
+use codex_protocol::protocol::TokenUsageInfo;
+
+/// Guardian reviews keep their own compaction regardless of the user setting.
+pub(crate) fn automatic_compaction_enabled(turn_context: &TurnContext) -> bool {
+    turn_context.config.model_auto_compact_enabled
+        || crate::guardian::is_basic_session_source(&turn_context.session_source)
+}
 
 #[derive(Debug)]
 pub(crate) struct ContextWindowTokenStatus {
@@ -23,6 +34,41 @@ fn tokens_remaining(limit: Option<i64>, used: i64) -> Option<i64> {
     limit.map(|limit| limit.saturating_sub(used).max(0))
 }
 
+/// Report runtime usage against the usable limit when automatic compaction is disabled.
+pub(crate) async fn publish_usage(
+    sess: &Session,
+    turn_context: &TurnContext,
+    status: &ContextWindowTokenStatus,
+) {
+    if automatic_compaction_enabled(turn_context) {
+        return;
+    }
+    let Some(context_window) = status.full_context_window_limit else {
+        return;
+    };
+    let (info, rate_limits) = {
+        let mut state = sess.state.lock().await;
+        let (info, rate_limits) = state.token_info_and_rate_limits();
+        let mut info = info.unwrap_or(TokenUsageInfo {
+            context_window_usage: None,
+            total_token_usage: TokenUsage::default(),
+            last_token_usage: TokenUsage::default(),
+            model_context_window: Some(context_window),
+        });
+        info.context_window_usage = Some(ContextWindowUsage {
+            used_tokens: status.active_context_tokens,
+            context_window,
+        });
+        state.set_token_info(Some(info.clone()));
+        (Some(info), rate_limits)
+    };
+    sess.send_event(
+        turn_context,
+        EventMsg::TokenCount(TokenCountEvent { info, rate_limits }),
+    )
+    .await;
+}
+
 pub(crate) async fn context_window_token_status(
     sess: &Session,
     turn_context: &TurnContext,
@@ -31,6 +77,7 @@ pub(crate) async fn context_window_token_status(
         sess,
         turn_context.config.as_ref(),
         turn_context.model_info().as_ref(),
+        !automatic_compaction_enabled(turn_context),
     )
     .await
 }
@@ -41,21 +88,57 @@ pub(crate) async fn context_window_token_status_for_model(
     turn_context: &TurnContext,
     model_info: &ModelInfo,
 ) -> ContextWindowTokenStatus {
+    let config = config_for_model(config, turn_context, model_info);
+    context_window_token_status_with_config(
+        sess, &config, model_info, /*estimate_unreported_usage*/ false,
+    )
+    .await
+}
+
+/// Usage checked before each request of a turn without automatic compaction.
+pub(crate) async fn usable_context_token_status(
+    sess: &Session,
+    turn_context: &TurnContext,
+    model_info: &ModelInfo,
+) -> ContextWindowTokenStatus {
+    let config = config_for_model(turn_context.config.as_ref(), turn_context, model_info);
+    context_window_token_status_with_config(
+        sess, &config, model_info, /*estimate_unreported_usage*/ true,
+    )
+    .await
+}
+
+fn config_for_model(config: &Config, turn_context: &TurnContext, model_info: &ModelInfo) -> Config {
     let mut config = config.clone();
     config.token_budget = super::token_budget::resolve_token_budget(
         turn_context.configured_token_budget.as_ref(),
         turn_context.use_model_token_budget_defaults,
         model_info,
     );
-    context_window_token_status_with_config(sess, &config, model_info).await
+    config
 }
 
 async fn context_window_token_status_with_config(
     sess: &Session,
     config: &Config,
     model_info: &ModelInfo,
+    estimate_unreported_usage: bool,
 ) -> ContextWindowTokenStatus {
-    let active_context_tokens = sess.get_total_token_usage().await;
+    // Without compaction, estimate the whole prompt until the provider reports usage.
+    let active_context_tokens = if estimate_unreported_usage
+        && sess
+            .token_usage_info()
+            .await
+            .is_none_or(|info| info.last_token_usage.total_tokens == 0)
+    {
+        let base_instructions = sess.get_prompt_base_instructions().await;
+        sess.clone_history()
+            .await
+            .estimate_token_count_with_base_instructions(&base_instructions)
+            .unwrap_or(0)
+    } else {
+        sess.get_total_token_usage().await
+    };
 
     // Count either the full active context or only the tokens added after the initial prefix.
     let (auto_compact_scope_tokens, auto_compact_scope_limit, auto_compact_window_prefill_tokens) =
