@@ -536,7 +536,11 @@ impl ChatWidget {
         replay_kind: Option<ReplayKind>,
     ) {
         self.restore_realtime_transcripts_before_turn(&notification.turn_id);
-        if replay_kind.is_none() && matches!(notification.item, ThreadItem::UserMessage { .. }) {
+        // A review's own prompt does not answer a context pause.
+        if replay_kind.is_none()
+            && !self.review.is_review_mode
+            && matches!(notification.item, ThreadItem::UserMessage { .. })
+        {
             self.input_queue.context_input_required = false;
         }
         match notification.item {

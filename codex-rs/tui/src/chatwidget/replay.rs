@@ -116,11 +116,15 @@ impl ChatWidget {
             .collect::<Vec<_>>();
         for (turn, hidden_nested_review_turn) in turns.into_iter().zip(hidden_nested_review_turns) {
             self.restore_realtime_transcripts_before_turn(&turn.id);
-            // A pause holds queued input until a later user message.
-            if turn
+            // A pause holds queued input until a later user message outside a review.
+            if !turn
                 .items
                 .iter()
-                .any(|item| matches!(item, ThreadItem::UserMessage { .. }))
+                .any(|item| matches!(item, ThreadItem::EnteredReviewMode { .. }))
+                && turn
+                    .items
+                    .iter()
+                    .any(|item| matches!(item, ThreadItem::UserMessage { .. }))
             {
                 self.input_queue.context_input_required = false;
             }

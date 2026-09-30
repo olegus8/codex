@@ -327,6 +327,8 @@ async fn start_or_steer(
         .await
     {
         Ok(turn_id) => {
+            // Explicit user input accepted into a running turn also answers a pause.
+            session.state.lock().await.context_pause.waiting_for_user = false;
             settings.apply_steered(session, submission_id).await?;
             Ok(TurnInputSubmission::Steered { turn_id })
         }
@@ -556,6 +558,8 @@ async fn steer(
             "only user input can steer a turn".to_string(),
         ));
     }
+    let answers_pause =
+        matches!(&input, SubmittedTurnInput::UserInput { content, .. } if !content.is_empty());
     let settings = PreparedTurnInputSettings::prepare(session, thread_settings, start).await?;
     match session
         .steer_input(
@@ -569,6 +573,9 @@ async fn steer(
         .await
     {
         Ok(turn_id) => {
+            if answers_pause {
+                session.state.lock().await.context_pause.waiting_for_user = false;
+            }
             settings.apply_steered(session, submission_id).await?;
             Ok(TurnInputSubmission::Steered { turn_id })
         }

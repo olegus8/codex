@@ -7,10 +7,14 @@ use codex_protocol::ThreadId;
 use codex_protocol::items::TurnItem;
 use codex_protocol::items::UserMessageItem;
 use codex_protocol::protocol::ContextPause;
+use codex_protocol::protocol::EnteredReviewModeEvent;
 use codex_protocol::protocol::EventMsg;
+use codex_protocol::protocol::ExitedReviewModeEvent;
 use codex_protocol::protocol::ItemCompletedEvent;
+use codex_protocol::protocol::ReviewTarget;
 use codex_protocol::protocol::TurnCompleteEvent;
 use codex_protocol::protocol::TurnStartedEvent;
+use codex_protocol::protocol::UserMessageEvent;
 use pretty_assertions::assert_eq;
 
 fn compaction(pause: Option<CompactionContextPause>) -> RolloutItem {
@@ -103,6 +107,33 @@ fn only_a_user_message_ends_a_restored_pause() {
         ),
         (reached(false), false)
     );
+}
+
+#[test]
+fn a_review_prompt_does_not_end_a_restored_pause() {
+    let thread_id = ThreadId::new();
+    let review_prompt = RolloutItem::EventMsg(EventMsg::UserMessage(UserMessageEvent {
+        message: "Review the change".to_string(),
+        ..Default::default()
+    }));
+    let items = [
+        paused_turn(thread_id),
+        RolloutItem::EventMsg(EventMsg::EnteredReviewMode(EnteredReviewModeEvent {
+            target: ReviewTarget::UncommittedChanges,
+            user_facing_hint: None,
+            turn_id: None,
+            item_id: None,
+        })),
+        review_prompt,
+        user_message(ThreadId::new()),
+        RolloutItem::EventMsg(EventMsg::ExitedReviewMode(ExitedReviewModeEvent {
+            turn_id: None,
+            item_id: None,
+            review_output: None,
+        })),
+    ];
+    let state = ContextPauseState::restore(thread_id, &items);
+    assert!(state.waiting_for_user);
 }
 
 #[test]

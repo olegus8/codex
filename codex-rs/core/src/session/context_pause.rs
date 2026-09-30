@@ -27,6 +27,8 @@ impl ContextPauseState {
     /// Only a user message ends the wait, matching explicit user input at runtime.
     pub(crate) fn restore(thread_id: ThreadId, items: &[RolloutItem]) -> Self {
         let mut state = Self::default();
+        // A review forwards its own prompt, which is not the user answering the pause.
+        let mut in_review = false;
         for item in items {
             match item {
                 RolloutItem::Compacted(compacted) => {
@@ -49,11 +51,16 @@ impl ContextPauseState {
                     state.reached = true;
                     state.waiting_for_user = true;
                 }
-                RolloutItem::EventMsg(EventMsg::UserMessage(_))
-                | RolloutItem::EventMsg(EventMsg::ItemCompleted(ItemCompletedEvent {
+                RolloutItem::EventMsg(EventMsg::EnteredReviewMode(_)) => in_review = true,
+                RolloutItem::EventMsg(EventMsg::ExitedReviewMode(_)) => in_review = false,
+                RolloutItem::EventMsg(EventMsg::UserMessage(_)) if !in_review => {
+                    state.waiting_for_user = false;
+                }
+                RolloutItem::EventMsg(EventMsg::ItemCompleted(ItemCompletedEvent {
+                    thread_id: item_thread_id,
                     item: TurnItem::UserMessage(_),
                     ..
-                })) => {
+                })) if *item_thread_id == thread_id => {
                     state.waiting_for_user = false;
                 }
                 _ => {}
