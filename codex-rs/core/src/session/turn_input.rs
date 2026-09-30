@@ -406,12 +406,11 @@ async fn start_if_idle(
         ..
     } = request;
     let origin = UserInputOrigin::from_turn_trigger(start.turn_trigger.as_deref());
-    // A paused thread admits only explicit user input, ahead of any pending triggers.
-    let context_paused = super::context_pause::waiting_for_user(session).await;
-    if context_paused && kind != TurnStartKind::User {
+    // Idle starts are unattended; a paused thread resumes only through start-or-steer.
+    if super::context_pause::waiting_for_user(session).await {
         return Err(context_paused_error());
     }
-    if !context_paused && session.input_queue.has_trigger_turn_mailbox_items().await {
+    if session.input_queue.has_trigger_turn_mailbox_items().await {
         return Ok(TurnInputSubmission::NotSubmitted {
             reason: NotSubmittedReason::PendingTriggerTurn,
         });
@@ -465,7 +464,7 @@ async fn start_if_idle(
         Arc::clone(&active_turn.turn_state)
     };
 
-    if !context_paused && session.input_queue.has_trigger_turn_mailbox_items().await {
+    if session.input_queue.has_trigger_turn_mailbox_items().await {
         session.clear_reserved_idle_turn(&turn_state).await;
         session.maybe_start_turn_for_pending_work().await;
         return Ok(TurnInputSubmission::NotSubmitted {

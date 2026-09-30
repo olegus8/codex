@@ -550,7 +550,17 @@ pub(crate) async fn run_turn(
         }
         .await;
         match sampling_request_result {
-            Ok(None) => break,
+            Ok(None) => {
+                finish_context_paused_turn(
+                    &sess,
+                    &step_context,
+                    stop_hook_active,
+                    &[],
+                    last_agent_message.clone(),
+                )
+                .await;
+                break;
+            }
             Ok(Some((sampling_request_output, sampling_request_input))) => {
                 guardian_budget_compacted = false;
                 let SamplingRequestResult {
@@ -584,6 +594,14 @@ pub(crate) async fn run_turn(
                 super::context_window::publish_usage(&sess, &turn_context, &token_status).await;
                 if super::context_pause::maybe_pause(&sess, &turn_context, &token_status).await {
                     last_agent_message = sampling_request_last_agent_message;
+                    finish_context_paused_turn(
+                        &sess,
+                        &step_context,
+                        stop_hook_active,
+                        &sampling_request_input,
+                        last_agent_message.clone(),
+                    )
+                    .await;
                     break;
                 }
                 let token_limit_reached = token_status.token_limit_reached;
@@ -1300,6 +1318,33 @@ async fn track_turn_resolved_config_analytics(
             workspace_kind: turn_context.turn_metadata_state.workspace_kind(),
             is_first_turn,
         });
+}
+
+/// A paused turn still reaches Stop and after-agent hooks, but no hook may continue it.
+async fn finish_context_paused_turn(
+    sess: &Arc<Session>,
+    step_context: &Arc<StepContext>,
+    stop_hook_active: bool,
+    input: &[ResponseItem],
+    last_agent_message: Option<String>,
+) {
+    let outcome = run_turn_stop_hooks(
+        sess,
+        step_context,
+        stop_hook_active,
+        last_agent_message.clone(),
+    )
+    .await;
+    if outcome.should_block {
+        sess.send_event(
+            &step_context.turn,
+            EventMsg::Warning(WarningEvent {
+                message: "Context paused; the Stop hook's continuation was not run.".to_string(),
+            }),
+        )
+        .await;
+    }
+    run_legacy_after_agent_hook(sess, &step_context.turn, input, last_agent_message).await;
 }
 
 #[instrument(level = "trace", skip_all)]

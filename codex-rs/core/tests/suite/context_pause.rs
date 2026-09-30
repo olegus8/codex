@@ -12,6 +12,7 @@ use codex_protocol::dynamic_tools::DynamicToolSpec;
 use codex_protocol::protocol::EventMsg;
 use codex_protocol::protocol::Op;
 use codex_protocol::user_input::UserInput;
+use core_test_support::hooks::trust_discovered_hooks;
 use core_test_support::responses::ev_assistant_message;
 use core_test_support::responses::ev_completed;
 use core_test_support::responses::ev_completed_with_tokens;
@@ -257,6 +258,137 @@ async fn context_pause_survives_restart_and_is_independent_per_session() -> Resu
     .await;
     let fresh = builder().build_with_auto_env(&server).await?;
     assert!(turn(&fresh, "Independent session").await?["context_pause"].is_object());
+    Ok(())
+}
+
+async fn assert_idle_start_refused(test: &TestCodex) {
+    let error = test
+        .codex
+        .start_turn_if_idle(TurnInputRequest::user_input(vec![UserInput::Text {
+            text: "Queued work".into(),
+            text_elements: Vec::new(),
+        }]))
+        .await
+        .expect_err("a paused thread refuses unattended starts");
+    assert!(error.to_string().contains("explicit user input"), "{error}");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn context_pause_outlasts_idle_starts_manual_compaction_and_restart() -> Result<()> {
+    skip_if_no_network!(Ok(()));
+    let server = start_mock_server().await;
+    mount_sse_once(
+        &server,
+        sse(vec![
+            plan_call("retained"),
+            ev_completed_with_tokens("r1", /*total_tokens*/ 134_000),
+        ]),
+    )
+    .await;
+    let compact = mount_sse_once(
+        &server,
+        sse(vec![
+            ev_assistant_message("summary", "Requested summary"),
+            ev_completed("r2"),
+        ]),
+    )
+    .await;
+    let mut factory = builder();
+    let test = factory.build_with_auto_env(&server).await?;
+    assert!(turn(&test, "Save my work").await?["context_pause"].is_object());
+    assert_idle_start_refused(&test).await;
+    test.codex.submit(Op::Compact).await?;
+    wait_for_event(&test.codex, |event| {
+        matches!(event, EventMsg::TurnComplete(_))
+    })
+    .await;
+    assert_eq!(compact.requests().len(), 1);
+    assert_idle_start_refused(&test).await;
+    let restarted = factory.restart(&server, &test).await?;
+    assert_idle_start_refused(&restarted).await;
+    let handoff = mount_sse_once(
+        &server,
+        sse(vec![
+            ev_assistant_message("m3", "Handoff"),
+            ev_completed_with_tokens("r3", /*total_tokens*/ 20_000),
+        ]),
+    )
+    .await;
+    assert!(turn(&restarted, "Write a handoff").await?["context_pause"].is_null());
+    assert_eq!(handoff.requests().len(), 1);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn context_pause_runs_stop_hooks_without_continuing() -> Result<()> {
+    skip_if_no_network!(Ok(()));
+    let server = start_mock_server().await;
+    let first = mount_sse_once(
+        &server,
+        sse(vec![
+            plan_call("retained"),
+            ev_completed_with_tokens("r1", /*total_tokens*/ 134_000),
+        ]),
+    )
+    .await;
+    let continuation = mount_sse_once(
+        &server,
+        sse(vec![
+            ev_assistant_message("m2", "Continued"),
+            ev_completed("r2"),
+        ]),
+    )
+    .await;
+    let test = builder()
+        .with_pre_build_hook(|home| {
+            let script = home.join("stop_hook.py");
+            std::fs::write(
+                &script,
+                concat!(
+                    "from pathlib import Path\n",
+                    "import json, sys\n",
+                    "json.load(sys.stdin)\n",
+                    "Path(__file__).with_suffix('.called').touch()\n",
+                    "print(json.dumps({'decision': 'block', 'reason': 'Keep going'}))\n",
+                ),
+            )
+            .expect("write stop hook");
+            let python = if cfg!(windows) { "python" } else { "python3" };
+            std::fs::write(
+                home.join("hooks.json"),
+                json!({"hooks": {"Stop": [{"hooks": [{
+                    "type": "command",
+                    "command": format!("{python} \"{}\"", script.display()),
+                }]}]}})
+                .to_string(),
+            )
+            .expect("write hooks");
+        })
+        .with_config(trust_discovered_hooks)
+        .build_with_auto_env(&server)
+        .await?;
+    test.codex
+        .start_or_steer_turn(TurnInputRequest::user_input(vec![UserInput::Text {
+            text: "Do the work".into(),
+            text_elements: Vec::new(),
+        }]))
+        .await?;
+    let mut warnings = Vec::new();
+    let event = wait_for_event(&test.codex, |event| {
+        if let EventMsg::Warning(warning) = event {
+            warnings.push(warning.message.clone());
+        }
+        matches!(event, EventMsg::TurnComplete(_))
+    })
+    .await;
+    assert!(serde_json::to_value(event)?["context_pause"].is_object());
+    assert!(test.codex_home_path().join("stop_hook.called").exists());
+    assert_eq!(
+        warnings,
+        vec!["Context paused; the Stop hook's continuation was not run.".to_string()]
+    );
+    assert_eq!(first.requests().len(), 1);
+    assert!(continuation.requests().is_empty());
     Ok(())
 }
 

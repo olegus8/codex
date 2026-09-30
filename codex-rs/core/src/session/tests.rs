@@ -5941,6 +5941,7 @@ async fn compaction_persists_resume_metadata_and_companion_records() {
     session.state.lock().await.last_started_turn_id = Some("checkpoint-turn".into());
     session.multi_agent_version = std::sync::OnceLock::from(MultiAgentVersion::V2);
     let expected = CompactionResumeMetadata {
+        context_pause: None,
         multi_agent_version: Some(MultiAgentVersion::V2),
         last_started_turn_id: Some("checkpoint-turn".into()),
         previous_turn_settings: Some(previous_turn_settings),

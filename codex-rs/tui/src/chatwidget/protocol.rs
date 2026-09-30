@@ -413,7 +413,9 @@ impl ChatWidget {
         self.thread_usage.replaying_turn_completion = replay_kind.is_some();
         match notification.turn.status {
             TurnStatus::Completed => {
-                self.input_queue.context_input_required = notification.turn.context_pause.is_some();
+                if notification.turn.context_pause.is_some() {
+                    self.input_queue.context_input_required = true;
+                }
                 let last_agent_message =
                     notification
                         .turn
@@ -534,6 +536,9 @@ impl ChatWidget {
         replay_kind: Option<ReplayKind>,
     ) {
         self.restore_realtime_transcripts_before_turn(&notification.turn_id);
+        if replay_kind.is_none() && matches!(notification.item, ThreadItem::UserMessage { .. }) {
+            self.input_queue.context_input_required = false;
+        }
         match notification.item {
             ThreadItem::UserMessage { content, .. } if replay_kind.is_none() => {
                 self.note_realtime_user_item_started(&notification.turn_id, &content);

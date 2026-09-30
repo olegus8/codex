@@ -2371,6 +2371,8 @@ impl Session {
             .send_event_raw_with_persistence(event, /*persist*/ true)
             .await
         {
+            // An unsaved pause did not take effect.
+            self.state.lock().await.context_pause = Default::default();
             turn_context
                 .terminal_error
                 .lock()
@@ -4217,6 +4219,7 @@ impl Session {
                     multi_agent_version: self.multi_agent_version(),
                     last_started_turn_id: state.last_started_turn_id.clone(),
                     previous_turn_settings: state.previous_turn_settings(),
+                    context_pause: state.context_pause.checkpoint(self.thread_id),
                 }),
             }
         };

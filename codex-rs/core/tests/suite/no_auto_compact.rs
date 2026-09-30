@@ -324,7 +324,7 @@ async fn no_auto_compact_stops_at_exhaustion_and_preserves_input(cause: Exhausti
     Ok(())
 }
 
-#[test_case(185_000; "smaller window still fits")]
+#[test_case(170_000; "smaller window still fits")]
 #[test_case(195_000; "smaller window exhausted")]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn no_auto_compact_model_change_preserves_history(used: i64) -> Result<()> {

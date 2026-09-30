@@ -1,6 +1,7 @@
 //! Defines resume metadata stored directly on a compaction.
 
 use crate::RolloutItem;
+use codex_protocol::ThreadId;
 use codex_protocol::protocol::MultiAgentVersion;
 use codex_protocol::turn_input::CyberAccessProgram;
 use schemars::JsonSchema;
@@ -18,6 +19,17 @@ pub struct CompactionResumeMetadata {
     /// Turn identity used to admit continuations after cold resume.
     pub last_started_turn_id: Option<String>,
     pub previous_turn_settings: Option<PreviousTurnSettings>,
+    /// Context pause already reached by the thread that wrote this compaction.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context_pause: Option<CompactionContextPause>,
+}
+
+/// Once-per-thread pause state carried past a compaction boundary.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct CompactionContextPause {
+    pub thread_id: ThreadId,
+    /// Autonomous processing still waits for explicit user input.
+    pub waiting_for_user: bool,
 }
 
 /// Previous user-turn settings used to reconstruct context changes after resume.

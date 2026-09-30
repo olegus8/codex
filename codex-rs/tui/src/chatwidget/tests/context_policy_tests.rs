@@ -104,7 +104,7 @@ async fn context_policy_exhaustion_keeps_queued_work() {
 }
 
 #[tokio::test]
-async fn context_policy_pause_replays_until_a_later_turn() {
+async fn context_policy_pause_replays_until_a_later_user_message() {
     let (mut chat, mut rx, _ops) = make_chatwidget_manual(/*model_override*/ None).await;
     let mut turn = app_server_turn(
         "pause",
@@ -124,13 +124,53 @@ async fn context_policy_pause_replays_until_a_later_turn() {
         .flatten()
         .collect();
     assert!(lines_to_single_string(&history).contains("request a handoff"));
-    let mut later = app_server_turn(
-        "later",
+    let mut compaction = app_server_turn(
+        "compaction",
         AppServerTurnStatus::Completed,
         /*duration_ms*/ None,
         /*error*/ None,
     );
-    later.items_view = codex_app_server_protocol::TurnItemsView::NotLoaded;
-    chat.replay_thread_turns(vec![later], ReplayKind::ThreadSnapshot);
+    compaction.items_view = codex_app_server_protocol::TurnItemsView::NotLoaded;
+    chat.replay_thread_turns(vec![compaction], ReplayKind::ThreadSnapshot);
+    assert!(chat.input_queue.context_input_required);
+    let mut handoff = app_server_turn(
+        "handoff",
+        AppServerTurnStatus::Completed,
+        /*duration_ms*/ None,
+        /*error*/ None,
+    );
+    handoff.items = vec![AppServerThreadItem::UserMessage {
+        id: "handoff-request".into(),
+        client_id: None,
+        content: Vec::new(),
+    }];
+    chat.replay_thread_turns(vec![handoff], ReplayKind::ThreadSnapshot);
     assert!(!chat.input_queue.context_input_required);
+}
+
+#[tokio::test]
+async fn context_policy_pause_holds_queue_through_shell_commands() {
+    let (mut chat, _rx, mut ops) = make_chatwidget_manual(/*model_override*/ None).await;
+    chat.thread_id = Some(ThreadId::new());
+    chat.input_queue.context_input_required = true;
+    handle_turn_started(&mut chat, "shell");
+    chat.queue_user_message("Queued work".into());
+    chat.handle_server_notification(
+        ServerNotification::TurnCompleted(TurnCompletedNotification {
+            thread_id: "thread-1".into(),
+            turn: app_server_turn(
+                "shell",
+                AppServerTurnStatus::Completed,
+                /*duration_ms*/ None,
+                /*error*/ None,
+            ),
+        }),
+        /*replay_kind*/ None,
+    );
+    assert!(chat.input_queue.context_input_required);
+    assert!(!chat.maybe_send_next_queued_input());
+    while let Ok(op) = ops.try_recv() {
+        assert!(!matches!(op, Op::UserTurn { .. }), "{op:?}");
+    }
+    assert_eq!(chat.input_queue.queued_user_messages.len(), 1);
 }

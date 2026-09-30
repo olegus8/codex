@@ -116,12 +116,24 @@ impl ChatWidget {
             .collect::<Vec<_>>();
         for (turn, hidden_nested_review_turn) in turns.into_iter().zip(hidden_nested_review_turns) {
             self.restore_realtime_transcripts_before_turn(&turn.id);
-            self.input_queue.context_input_required = turn.context_pause.is_some();
+            // A pause holds queued input until a later user message.
+            if turn
+                .items
+                .iter()
+                .any(|item| matches!(item, ThreadItem::UserMessage { .. }))
+            {
+                self.input_queue.context_input_required = false;
+            }
+            if turn.context_pause.is_some() {
+                self.input_queue.context_input_required = true;
+            }
+            let pending_pause =
+                turn.context_pause.is_some() && latest_turn_id.as_deref() == Some(turn.id.as_str());
             // Defer completed metadata-only turns until their page loads. Active
             // turns must restore their lifecycle even before any items are available.
-            // A context pause is restored with its turn so the notice is shown again.
+            // The latest turn's pause is restored with it so the notice is shown again.
             if turn.status == TurnStatus::Completed
-                && turn.context_pause.is_none()
+                && !pending_pause
                 && turn.items_view == codex_app_server_protocol::TurnItemsView::NotLoaded
                 && turn.items.is_empty()
             {

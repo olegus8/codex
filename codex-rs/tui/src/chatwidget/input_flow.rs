@@ -57,6 +57,10 @@ impl ChatWidget {
                 {
                     return;
                 }
+                // An explicit message ends a context pause; a shell command does not.
+                if !user_message.text.starts_with('!') {
+                    self.input_queue.context_input_required = false;
+                }
                 self.app_event_tx.send(AppEvent::FollowTranscript);
                 let should_submit_now = self.is_session_configured()
                     && !self.is_plan_streaming_in_tui()

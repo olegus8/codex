@@ -2,10 +2,13 @@ use super::context_window::ContextWindowTokenStatus;
 use super::context_window::automatic_compaction_enabled;
 use super::session::Session;
 use super::turn_context::TurnContext;
+use codex_history::CompactionContextPause;
 use codex_history::RolloutItem;
 use codex_protocol::ThreadId;
+use codex_protocol::items::TurnItem;
 use codex_protocol::protocol::ContextPause;
 use codex_protocol::protocol::EventMsg;
+use codex_protocol::protocol::ItemCompletedEvent;
 use codex_thread_store::PersistContext;
 
 #[derive(Debug, Default)]
@@ -19,10 +22,24 @@ pub(crate) async fn waiting_for_user(session: &Session) -> bool {
 }
 
 impl ContextPauseState {
+    /// Rebuilds the pause from a rollout, which may begin at a compaction.
+    ///
+    /// Only a user message ends the wait, matching explicit user input at runtime.
     pub(crate) fn restore(thread_id: ThreadId, items: &[RolloutItem]) -> Self {
         let mut state = Self::default();
         for item in items {
             match item {
+                RolloutItem::Compacted(compacted) => {
+                    if let Some(pause) = compacted
+                        .resume_metadata
+                        .as_ref()
+                        .and_then(|metadata| metadata.context_pause)
+                        .filter(|pause| pause.thread_id == thread_id)
+                    {
+                        state.reached = true;
+                        state.waiting_for_user = pause.waiting_for_user;
+                    }
+                }
                 RolloutItem::EventMsg(EventMsg::TurnComplete(event))
                     if event
                         .context_pause
@@ -32,13 +49,25 @@ impl ContextPauseState {
                     state.reached = true;
                     state.waiting_for_user = true;
                 }
-                RolloutItem::EventMsg(EventMsg::TurnStarted(_)) => {
+                RolloutItem::EventMsg(EventMsg::UserMessage(_))
+                | RolloutItem::EventMsg(EventMsg::ItemCompleted(ItemCompletedEvent {
+                    item: TurnItem::UserMessage(_),
+                    ..
+                })) => {
                     state.waiting_for_user = false;
                 }
                 _ => {}
             }
         }
         state
+    }
+
+    /// State a compaction carries so a resume from it keeps the pause.
+    pub(crate) fn checkpoint(&self, thread_id: ThreadId) -> Option<CompactionContextPause> {
+        self.reached.then_some(CompactionContextPause {
+            thread_id,
+            waiting_for_user: self.waiting_for_user,
+        })
     }
 }
 
@@ -74,6 +103,10 @@ pub(crate) async fn maybe_pause(
     });
     true
 }
+
+#[cfg(test)]
+#[path = "context_pause_tests.rs"]
+mod tests;
 
 /// Flush the pause marker before delivery.
 pub(crate) async fn persist_completion(session: &Session, event: &EventMsg) -> anyhow::Result<()> {
