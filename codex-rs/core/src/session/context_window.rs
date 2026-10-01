@@ -90,7 +90,7 @@ pub(crate) async fn context_window_token_status_for_model(
 ) -> ContextWindowTokenStatus {
     let config = config_for_model(config, turn_context, model_info);
     context_window_token_status_with_config(
-        sess, &config, model_info, /*estimate_unreported_usage*/ false,
+        sess, &config, model_info, /*measure_provider_usage*/ false,
     )
     .await
 }
@@ -103,7 +103,7 @@ pub(crate) async fn usable_context_token_status(
 ) -> ContextWindowTokenStatus {
     let config = config_for_model(turn_context.config.as_ref(), turn_context, model_info);
     context_window_token_status_with_config(
-        sess, &config, model_info, /*estimate_unreported_usage*/ true,
+        sess, &config, model_info, /*measure_provider_usage*/ true,
     )
     .await
 }
@@ -122,14 +122,16 @@ async fn context_window_token_status_with_config(
     sess: &Session,
     config: &Config,
     model_info: &ModelInfo,
-    estimate_unreported_usage: bool,
+    measure_provider_usage: bool,
 ) -> ContextWindowTokenStatus {
-    // Without compaction, estimate the whole prompt until the provider reports usage.
-    let active_context_tokens = if estimate_unreported_usage
-        && sess
-            .token_usage_info()
-            .await
-            .is_none_or(|info| info.last_token_usage.total_tokens == 0)
+    // Without compaction, measure the provider's reported usage, estimating the whole prompt
+    // until the provider reports any.
+    let active_context_tokens = if !measure_provider_usage {
+        sess.get_total_token_usage().await
+    } else if sess
+        .token_usage_info()
+        .await
+        .is_none_or(|info| info.last_token_usage.total_tokens == 0)
     {
         let base_instructions = sess.get_prompt_base_instructions().await;
         sess.clone_history()
@@ -137,7 +139,7 @@ async fn context_window_token_status_with_config(
             .estimate_token_count_with_base_instructions(&base_instructions)
             .unwrap_or(0)
     } else {
-        sess.get_total_token_usage().await
+        sess.get_reported_token_usage().await
     };
 
     // Count either the full active context or only the tokens added after the initial prefix.
