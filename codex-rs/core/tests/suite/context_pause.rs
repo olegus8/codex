@@ -17,6 +17,7 @@ use core_test_support::responses::ev_assistant_message;
 use core_test_support::responses::ev_completed;
 use core_test_support::responses::ev_completed_with_tokens;
 use core_test_support::responses::ev_function_call;
+use core_test_support::responses::ev_reasoning_item;
 use core_test_support::responses::mount_sse_once;
 use core_test_support::responses::sse;
 use core_test_support::responses::start_mock_server;
@@ -140,6 +141,63 @@ async fn context_pause_stops_before_the_next_model_request(
             "pause is durable before delivery"
         );
         assert!(rollout.contains("Plan updated"));
+    }
+    Ok(())
+}
+
+#[test_case(125_000, false; "below threshold")]
+#[test_case(134_000, true; "at threshold")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn context_policy_counts_past_reasoning_once(used: i64, paused: bool) -> Result<()> {
+    skip_if_no_network!(Ok(()));
+    let server = start_mock_server().await;
+    let reasoning = "x".repeat(400_000);
+    let first = mount_sse_once(
+        &server,
+        sse(vec![
+            ev_reasoning_item("reasoning", &[], &[reasoning.as_str()]),
+            plan_call("first-tool"),
+            ev_completed_with_tokens("r1", /*total_tokens*/ 100_000),
+        ]),
+    )
+    .await;
+    let second = mount_sse_once(
+        &server,
+        sse(vec![
+            ev_assistant_message("m2", "Done"),
+            ev_completed_with_tokens("r2", /*total_tokens*/ 120_000),
+        ]),
+    )
+    .await;
+    let third = mount_sse_once(
+        &server,
+        sse(vec![
+            plan_call("second-tool"),
+            ev_completed_with_tokens("r3", used),
+        ]),
+    )
+    .await;
+    let fourth = mount_sse_once(
+        &server,
+        sse(vec![
+            ev_assistant_message("m4", "Merged"),
+            ev_completed("r4"),
+        ]),
+    )
+    .await;
+    let test = builder().build_with_auto_env(&server).await?;
+    assert!(turn(&test, "Do the work").await?["context_pause"].is_null());
+    assert_eq!(second.requests().len(), 1);
+    let event = turn(&test, "merge it").await?;
+    assert_eq!(first.requests().len(), 1);
+    assert_eq!(third.requests().len(), 1);
+    assert_eq!(fourth.requests().len(), usize::from(!paused));
+    assert_eq!(event["context_pause"].is_object(), paused);
+    if paused {
+        let reported = event["context_pause"]["used_tokens"]
+            .as_i64()
+            .expect("context usage");
+        assert!((used..used + 1_000).contains(&reported), "{reported}");
     }
     Ok(())
 }

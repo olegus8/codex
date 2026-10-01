@@ -1438,6 +1438,13 @@ impl Session {
         state.get_total_token_usage(state.server_reasoning_included())
     }
 
+    /// The provider's last reported usage, which already counts every reasoning item it was
+    /// sent, plus what history added since.
+    pub(crate) async fn get_reported_token_usage(&self) -> i64 {
+        let state = self.state.lock().await;
+        state.get_total_token_usage(/*server_reasoning_included*/ true)
+    }
+
     pub(crate) async fn auto_compact_window_snapshot(&self) -> AutoCompactWindowSnapshot {
         let state = self.state.lock().await;
         state.auto_compact_window_snapshot()
