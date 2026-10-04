@@ -247,6 +247,9 @@ impl ChatWidget {
 
     /// Set the model in the widget's config copy and stored collaboration mode.
     pub(crate) fn set_model(&mut self, model: &str) {
+        if !self.local_settings.model_switching_enabled {
+            return;
+        }
         if model != self.current_model() {
             if self.current_model() == crate::model_catalog::LUNA_RESERVE_MODEL {
                 self.clear_reserve_return();
@@ -526,7 +529,10 @@ impl ChatWidget {
 
     pub(crate) fn set_effective_collaboration_mode(&mut self, mode: CollaborationMode) {
         let mode_kind = mode.mode;
-        let settings = mode.settings;
+        let mut settings = mode.settings;
+        if !self.local_settings.model_switching_enabled {
+            settings.model = self.current_model().to_string();
+        }
         if mode_kind == ModeKind::Default {
             self.current_collaboration_mode = CollaborationMode {
                 mode: ModeKind::Default,
@@ -651,6 +657,9 @@ impl ChatWidget {
     /// When collaboration modes are enabled and a preset is selected,
     /// the current mode is attached to submissions as `Op::UserTurn { collaboration_mode: Some(...) }`.
     pub(crate) fn set_collaboration_mask(&mut self, mut mask: CollaborationModeMask) {
+        if !self.local_settings.model_switching_enabled {
+            mask.model = Some(self.current_model().to_string());
+        }
         if !self.collaboration_modes_enabled() {
             return;
         }

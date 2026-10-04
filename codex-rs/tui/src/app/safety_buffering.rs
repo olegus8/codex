@@ -28,6 +28,9 @@ impl App {
         app_server: &mut AppServerSession,
         retry: SafetyBufferedRetry,
     ) {
+        if !self.local_settings.model_switching_enabled {
+            return;
+        }
         let SafetyBufferedRetry {
             thread_id,
             turn_id,

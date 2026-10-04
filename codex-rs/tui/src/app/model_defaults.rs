@@ -19,6 +19,10 @@ impl App {
         model: String,
         effort: Option<ReasoningEffort>,
     ) {
+        if !self.local_settings.model_switching_enabled && self.chat_widget.current_model() != model
+        {
+            return;
+        }
         let model_changed = self.chat_widget.current_model() != model
             || self.chat_widget.current_collaboration_mode().model() != model;
         if model_changed

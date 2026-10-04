@@ -1931,6 +1931,9 @@ impl App {
                     .await;
             }
             AppEvent::UpdateModel(model) => {
+                if !self.local_settings.model_switching_enabled {
+                    return Ok(AppRunControl::Continue);
+                }
                 if self
                     .active_thread_model_setting_update_params(model.clone())
                     .is_some_and(|params| params.permissions.is_some())
@@ -2063,6 +2066,11 @@ impl App {
                 self.chat_widget.open_advanced_reasoning_popup(model);
             }
             AppEvent::ApplyAdvancedReasoning { model, effort } => {
+                if !self.local_settings.model_switching_enabled
+                    && self.chat_widget.current_model() != model
+                {
+                    return Ok(AppRunControl::Continue);
+                }
                 self.app_event_tx.send(AppEvent::FollowTranscript);
                 if self
                     .active_thread_model_setting_update_params(model.clone())

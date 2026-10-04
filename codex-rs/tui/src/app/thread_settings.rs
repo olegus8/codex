@@ -68,6 +68,10 @@ impl App {
         &self,
         model: String,
     ) -> Option<ThreadSettingsUpdateParams> {
+        if !self.local_settings.model_switching_enabled && self.chat_widget.current_model() != model
+        {
+            return None;
+        }
         let thread_id = self.active_thread_id?;
         let is_cyber_model = self.model_catalog.try_list_models().is_ok_and(|models| {
             models.iter().any(|preset| {
@@ -214,6 +218,18 @@ impl App {
         app_server: &mut AppServerSession,
         mut params: ThreadSettingsUpdateParams,
     ) -> bool {
+        if !self.local_settings.model_switching_enabled
+            && (params
+                .model
+                .as_deref()
+                .is_some_and(|model| model != self.chat_widget.current_model())
+                || params
+                    .collaboration_mode
+                    .as_ref()
+                    .is_some_and(|mode| mode.model() != self.chat_widget.current_model()))
+        {
+            return false;
+        }
         params.personality = personality_opt_out_only(params.personality);
         if !thread_settings_update_has_changes(&params) {
             return false;
