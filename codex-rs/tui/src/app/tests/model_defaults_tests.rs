@@ -5,6 +5,50 @@ use codex_config::LoaderOverrides;
 use pretty_assertions::assert_eq;
 
 #[tokio::test]
+async fn fixed_session_model_rejects_queued_changes_on_the_server() -> Result<()> {
+    let (mut app, _events, _ops) = make_test_app_with_channels().await;
+    app.local_settings.model_switching_enabled = false;
+    let mut server = Box::pin(crate::start_embedded_app_server_for_picker(&app.config)).await?;
+    let started = server.start_thread(&app.config).await?;
+    let thread_id = started.session.thread_id;
+    let model = started.session.model.clone();
+    app.enqueue_primary_thread_session(started.session, started.turns)
+        .await?;
+    let mut tui = crate::tui::test_support::make_test_tui()?;
+    for event in [
+        AppEvent::UpdateModel("gpt-5.6-terra".into()),
+        AppEvent::SelectSessionModel {
+            model: "gpt-5.6-terra".into(),
+            effort: Some(ReasoningEffortConfig::High),
+        },
+        AppEvent::ApplyAdvancedReasoning {
+            model: "gpt-5.6-terra".into(),
+            effort: ReasoningEffortConfig::High,
+        },
+    ] {
+        Box::pin(app.handle_event(&mut tui, &mut server, event)).await?;
+        assert_eq!(app.chat_widget.current_model(), model);
+    }
+    assert!(
+        !app.send_thread_settings_update(
+            &mut server,
+            codex_app_server_protocol::ThreadSettingsUpdateParams {
+                thread_id: thread_id.to_string(),
+                model: Some("gpt-5.6-terra".into()),
+                ..Default::default()
+            }
+        )
+        .await
+    );
+    app.sync_active_thread_reasoning_setting(&mut server, Some(ReasoningEffortConfig::High))
+        .await;
+    let settings = next_thread_settings_updated(&mut server, thread_id).await;
+    assert_eq!(settings.thread_settings.model, model);
+    server.shutdown().await?;
+    Ok(())
+}
+
+#[tokio::test]
 async fn session_model_selection_preserves_defaults_and_updates_active_thread() -> Result<()> {
     for mode in [ModeKind::Default, ModeKind::Plan] {
         let (mut app, mut events, _ops) = make_test_app_with_channels().await;

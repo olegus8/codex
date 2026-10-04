@@ -20,6 +20,7 @@ use codex_utils_absolute_path::AbsolutePathBuf;
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct LocalSettings {
+    pub(crate) model_switching_enabled: bool,
     pub(crate) tui: Tui,
     pub(crate) transcript_mode: TranscriptMode,
     pub(crate) history: History,
@@ -57,6 +58,12 @@ impl LocalSettings {
             config.animations
         };
         Self {
+            model_switching_enabled: config
+                .config_layer_stack
+                .effective_config()
+                .get("model_switching_enabled")
+                .and_then(toml::Value::as_bool)
+                .unwrap_or(true),
             transcript_mode: TranscriptMode::resolve(
                 config.tui_fullscreen_transcript,
                 config.tui_alternate_screen != codex_config::types::AltScreenMode::Never,
@@ -122,6 +129,7 @@ impl LocalSettings {
     /// Refresh editable preferences without changing this launch's terminal ownership.
     pub(crate) fn reloaded(&self, config: &Config) -> Self {
         let mut settings = Self::from(config);
+        settings.model_switching_enabled &= self.model_switching_enabled;
         settings.transcript_mode = self.transcript_mode;
         settings.tui.alternate_screen = self.tui.alternate_screen;
         settings

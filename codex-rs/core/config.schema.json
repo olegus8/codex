@@ -7465,6 +7465,10 @@
     "model_reasoning_summary": {
       "$ref": "#/definitions/ReasoningSummary"
     },
+    "model_switching_enabled": {
+      "description": "Defaults to true. When false, the TUI keeps each session's model.",
+      "type": "boolean"
+    },
     "model_verbosity": {
       "allOf": [
         {

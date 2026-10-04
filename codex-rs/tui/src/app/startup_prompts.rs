@@ -271,7 +271,7 @@ pub(super) async fn prepare_startup_tooltip_override(
     available_models: &[ModelPreset],
     is_first_run: bool,
 ) -> Option<String> {
-    if is_first_run || !config.tui.show_tooltips {
+    if is_first_run || !config.tui.show_tooltips || !config.model_switching_enabled {
         return None;
     }
 
@@ -314,6 +314,9 @@ pub(super) async fn handle_model_migration_prompt_if_needed(
     app_event_tx: &AppEventSender,
     available_models: &[ModelPreset],
 ) -> std::io::Result<Option<AppExitInfo>> {
+    if !local_settings.model_switching_enabled {
+        return Ok(None);
+    }
     let upgrade = model_upgrade_for_migration(&config.model_provider_id, model, available_models);
 
     if let Some(ModelUpgrade {

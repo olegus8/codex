@@ -112,7 +112,8 @@ impl ChatWidget {
             faster_model,
             ..
         } = notification;
-        if matches!(replay_kind, Some(ReplayKind::ResumeInitialMessages))
+        if !self.local_settings.model_switching_enabled
+            || matches!(replay_kind, Some(ReplayKind::ResumeInitialMessages))
             || !self.turn_lifecycle.agent_turn_running
             || self.turn_lifecycle.last_turn_id.as_deref() != Some(turn_id.as_str())
             || self
@@ -244,7 +245,10 @@ impl ChatWidget {
         turn: AppCommand,
         prompt: UserMessage,
     ) {
-        if self.thread_id != Some(thread_id) || !self.can_retry_safety_buffered_turn(&turn_id) {
+        if !self.local_settings.model_switching_enabled
+            || self.thread_id != Some(thread_id)
+            || !self.can_retry_safety_buffered_turn(&turn_id)
+        {
             return;
         }
 

@@ -71,7 +71,8 @@ impl ChatWidget {
     }
 
     pub(super) fn waiting_for_luna_reserve(&self) -> bool {
-        self.current_model() != LUNA_RESERVE_MODEL
+        self.local_settings.model_switching_enabled
+            && self.current_model() != LUNA_RESERVE_MODEL
             && self
                 .backend_banner_state
                 .banner
@@ -80,7 +81,10 @@ impl ChatWidget {
     }
 
     pub(crate) fn backend_banner_fallback(&mut self) -> Option<AutomaticModelSwitch> {
-        if !self.has_chatgpt_account || !self.requires_openai_auth {
+        if !self.local_settings.model_switching_enabled
+            || !self.has_chatgpt_account
+            || !self.requires_openai_auth
+        {
             return None;
         }
         if self.current_model() == LUNA_RESERVE_MODEL
@@ -332,6 +336,11 @@ impl ChatWidget {
             .rate_limit_upsell
             .as_ref()
             .and_then(BackendBanner::parse)
+            .filter(|banner| {
+                self.local_settings.model_switching_enabled
+                    || (banner.fallback_model_slugs.is_empty()
+                        && banner.banner_type != LUNA_RESERVE_BANNER)
+            })
             .map(|mut banner| {
                 banner.account_id = response.account_id.clone().unwrap_or_default();
                 banner.plan_type = response.rate_limits.plan_type;

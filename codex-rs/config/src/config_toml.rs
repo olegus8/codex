@@ -165,6 +165,8 @@ pub struct FeatureToggleToml {
 pub struct ConfigToml {
     /// Optional override of model selection.
     pub model: Option<String>,
+    /// Defaults to true. When false, the TUI keeps each session's model.
+    pub model_switching_enabled: Option<bool>,
     /// Review model override used by the `/review` feature.
     pub review_model: Option<String>,
 
