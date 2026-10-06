@@ -108,6 +108,8 @@ pub(crate) struct ContextManager {
     /// Process-unique so resumed roots cannot match a worker's cached assistant evidence.
     guardian_review_context_revision: u64,
     token_info: Option<TokenUsageInfo>,
+    /// History already included in the last published context usage.
+    pub(crate) context_usage_item_count: usize,
     /// Reference context snapshot used for diffing and producing model-visible
     /// settings update items.
     ///
@@ -244,6 +246,7 @@ impl ContextManager {
             token_info: TokenUsageInfo::new_or_append(
                 &None, &None, /*model_context_window*/ None,
             ),
+            context_usage_item_count: 0,
             reference_context_item: None,
             world_state_baseline: None,
         }
@@ -433,6 +436,7 @@ impl ContextManager {
 
     pub(crate) fn set_token_info(&mut self, info: Option<TokenUsageInfo>) {
         self.token_info = info;
+        self.context_usage_item_count = self.items.len();
     }
 
     pub(crate) fn set_reference_context_item(&mut self, item: Option<TurnContextItem>) {
@@ -474,7 +478,10 @@ impl ContextManager {
 
     pub(crate) fn set_token_usage_full(&mut self, context_window: i64) {
         match &mut self.token_info {
-            Some(info) => info.fill_to_context_window(context_window),
+            Some(info) => {
+                info.context_window_usage = None;
+                info.fill_to_context_window(context_window);
+            }
             None => {
                 self.token_info = Some(TokenUsageInfo::full_context_window(context_window));
             }
@@ -677,6 +684,9 @@ impl ContextManager {
             );
         }
         self.items = Arc::new(items);
+        if let Some(info) = self.token_info.as_mut() {
+            info.context_window_usage = None;
+        }
         self.history_version = self.history_version.saturating_add(1);
         self.reset_version = self.history_version;
         self.world_state_baseline = None;
@@ -715,6 +725,9 @@ impl ContextManager {
             self.review_history = Some(retained);
         }
         self.items = Arc::new(items);
+        if let Some(info) = self.token_info.as_mut() {
+            info.context_window_usage = None;
+        }
         self.history_version = self.history_version.saturating_add(1);
         if promoted {
             self.reset_version = self.history_version;
@@ -924,6 +937,20 @@ impl ContextManager {
         self.items_after_last_model_generated_item()
             .map(estimate_item_token_count)
             .fold(0i64, i64::saturating_add)
+    }
+
+    pub(crate) fn get_reported_token_usage(&self) -> i64 {
+        let Some(usage) = self
+            .token_info
+            .as_ref()
+            .and_then(|info| info.context_window_usage.as_ref())
+        else {
+            return self.get_total_token_usage(/*server_reasoning_included*/ true);
+        };
+        self.items[self.context_usage_item_count.min(self.items.len())..]
+            .iter()
+            .map(|envelope| estimate_item_token_count(&envelope.item))
+            .fold(usage.used_tokens, i64::saturating_add)
     }
 
     /// This function enforces a couple of invariants on the in-memory history:

@@ -19,6 +19,8 @@ pub(crate) fn automatic_compaction_enabled(turn_context: &TurnContext) -> bool {
 pub(crate) struct ContextWindowTokenStatus {
     // Full active context usage, independent of the configured auto-compact scope.
     pub(crate) active_context_tokens: i64,
+    // Items included in that measurement, before concurrent tool outputs arrive.
+    context_usage_item_count: usize,
     // Usage counted against `model_auto_compact_token_limit` for the current scope.
     pub(crate) auto_compact_scope_tokens: i64,
     pub(crate) auto_compact_scope_limit: Option<i64>,
@@ -60,6 +62,7 @@ pub(crate) async fn publish_usage(
             context_window,
         });
         state.set_token_info(Some(info.clone()));
+        state.history.context_usage_item_count = status.context_usage_item_count;
         (Some(info), rate_limits)
     };
     sess.send_event(
@@ -126,18 +129,19 @@ async fn context_window_token_status_with_config(
 ) -> ContextWindowTokenStatus {
     // Without compaction, measure the provider's reported usage, estimating the whole prompt
     // until the provider reports any.
-    let active_context_tokens = if !measure_provider_usage {
-        sess.get_total_token_usage().await
-    } else if sess
-        .token_usage_info()
-        .await
-        .is_none_or(|info| info.last_token_usage.total_tokens == 0)
-    {
+    let (active_context_tokens, context_usage_item_count) = if !measure_provider_usage {
+        (sess.get_total_token_usage().await, 0)
+    } else if sess.token_usage_info().await.is_none_or(|info| {
+        info.last_token_usage.total_tokens == 0 && info.context_window_usage.is_none()
+    }) {
         let base_instructions = sess.get_prompt_base_instructions().await;
-        sess.clone_history()
-            .await
-            .estimate_token_count_with_base_instructions(&base_instructions)
-            .unwrap_or(0)
+        let history = sess.clone_history().await;
+        (
+            history
+                .estimate_token_count_with_base_instructions(&base_instructions)
+                .unwrap_or(0),
+            history.annotated_items().len(),
+        )
     } else {
         sess.get_reported_token_usage().await
     };
@@ -203,6 +207,7 @@ async fn context_window_token_status_with_config(
 
     ContextWindowTokenStatus {
         active_context_tokens,
+        context_usage_item_count,
         auto_compact_scope_tokens,
         auto_compact_scope_limit,
         full_context_window_limit,

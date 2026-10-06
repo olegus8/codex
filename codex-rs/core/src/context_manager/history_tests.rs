@@ -1091,6 +1091,42 @@ fn total_token_usage_includes_all_items_after_last_model_generated_item() {
 }
 
 #[test]
+fn reported_context_usage_counts_items_after_its_checkpoint_once() {
+    let mut history = create_history_with_items(vec![assistant_msg("already counted")]);
+    history.set_token_info(Some(TokenUsageInfo {
+        context_window_usage: Some(codex_protocol::protocol::ContextWindowUsage {
+            used_tokens: 120_000,
+            context_window: 190_000,
+        }),
+        total_token_usage: TokenUsage::default(),
+        last_token_usage: TokenUsage {
+            total_tokens: 100_000,
+            ..Default::default()
+        },
+        model_context_window: Some(190_000),
+    }));
+    let added = assistant_msg("new streamed output");
+    history.record_items([&added], TruncationPolicy::Tokens(10_000));
+    let used = 120_000 + estimate_item_token_count(&added);
+    assert_eq!(history.get_reported_token_usage(), used);
+    let mut info = history.token_info().expect("token info");
+    info.context_window_usage
+        .as_mut()
+        .expect("context usage")
+        .used_tokens = used;
+    history.set_token_info(Some(info));
+    assert_eq!(history.get_reported_token_usage(), used);
+    history.update_token_info(
+        &TokenUsage {
+            total_tokens: 121_000,
+            ..Default::default()
+        },
+        /*model_context_window*/ Some(190_000),
+    );
+    assert_eq!(history.get_reported_token_usage(), 121_000);
+}
+
+#[test]
 fn for_prompt_strips_media_when_model_does_not_support_it() {
     let items = vec![
         ResponseItem::Message {
