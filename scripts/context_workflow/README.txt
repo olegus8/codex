@@ -10,6 +10,8 @@ must contain PreCompact and PostToolUse.
 Run Python without optimization. --only takes a scenario-name regex.
 Successful scenarios are skipped when repeated with identical inputs.
 After a failure or changed inputs, use a new output directory.
+Run long-stream on the last published fork release too; it must fail
+at the usage bound.
 
 Check each scenario's result, requests, events and saved history; terminal
 scenarios also save their screen. On the unmodified base,
