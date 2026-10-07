@@ -1438,8 +1438,7 @@ impl Session {
         state.get_total_token_usage(state.server_reasoning_included())
     }
 
-    /// The provider's last reported usage, which already counts every reasoning item it was
-    /// sent, plus what history added since.
+    /// Context usage and the number of history items it counts.
     pub(crate) async fn get_reported_token_usage(&self) -> (i64, usize) {
         let state = self.state.lock().await;
         (

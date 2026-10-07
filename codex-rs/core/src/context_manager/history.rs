@@ -108,7 +108,7 @@ pub(crate) struct ContextManager {
     /// Process-unique so resumed roots cannot match a worker's cached assistant evidence.
     guardian_review_context_revision: u64,
     token_info: Option<TokenUsageInfo>,
-    /// History already included in the last published context usage.
+    /// Items counted in the last published context usage.
     pub(crate) context_usage_item_count: usize,
     /// Reference context snapshot used for diffing and producing model-visible
     /// settings update items.

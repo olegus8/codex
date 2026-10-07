@@ -19,7 +19,7 @@ pub(crate) fn automatic_compaction_enabled(turn_context: &TurnContext) -> bool {
 pub(crate) struct ContextWindowTokenStatus {
     // Full active context usage, independent of the configured auto-compact scope.
     pub(crate) active_context_tokens: i64,
-    // Items included in that measurement, before concurrent tool outputs arrive.
+    // Items counted in active_context_tokens.
     context_usage_item_count: usize,
     // Usage counted against `model_auto_compact_token_limit` for the current scope.
     pub(crate) auto_compact_scope_tokens: i64,
@@ -127,8 +127,6 @@ async fn context_window_token_status_with_config(
     model_info: &ModelInfo,
     measure_provider_usage: bool,
 ) -> ContextWindowTokenStatus {
-    // Without compaction, measure the provider's reported usage, estimating the whole prompt
-    // until the provider reports any.
     let (active_context_tokens, context_usage_item_count) = if !measure_provider_usage {
         (sess.get_total_token_usage().await, 0)
     } else if sess.token_usage_info().await.is_none_or(|info| {
