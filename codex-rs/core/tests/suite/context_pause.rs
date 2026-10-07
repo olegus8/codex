@@ -202,6 +202,84 @@ async fn context_policy_counts_past_reasoning_once(used: i64, paused: bool) -> R
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn context_pause_stops_at_the_first_completed_item_in_a_long_stream() -> Result<()> {
+    skip_if_no_network!(Ok(()));
+    let server = start_mock_server().await;
+    let first = mount_sse_once(
+        &server,
+        sse(vec![
+            plan_call("retained-tool"),
+            ev_completed_with_tokens("r1", /*total_tokens*/ 120_000),
+        ]),
+    )
+    .await;
+    let reasoning = "x".repeat(2_000);
+    let mut items = (0..100)
+        .map(|index| ev_reasoning_item(&format!("stream-{index}"), &[], &[reasoning.as_str()]))
+        .collect::<Vec<_>>();
+    items.insert(0, plan_call("stream-tool"));
+    items.extend([
+        plan_call("must-not-run"),
+        ev_completed_with_tokens("r2", /*total_tokens*/ 180_000),
+    ]);
+    let second = mount_sse_once(&server, sse(items)).await;
+    let third = mount_sse_once(
+        &server,
+        sse(vec![
+            ev_assistant_message("m3", "Continued"),
+            ev_completed_with_tokens("r3", /*total_tokens*/ 140_000),
+        ]),
+    )
+    .await;
+    let test = builder().build_with_auto_env(&server).await?;
+    let event = turn(&test, "Do the long work").await?;
+    let used = event["context_pause"]["used_tokens"]
+        .as_i64()
+        .expect("stream pauses before response.completed");
+    assert!(
+        (133_000..133_475).contains(&used),
+        "first item past 70%: {used}"
+    );
+    assert_eq!(first.requests().len(), 1);
+    assert_eq!(second.requests().len(), 1);
+    assert!(third.requests().is_empty());
+
+    let rollout = std::fs::read_to_string(
+        test.session_configured
+            .rollout_path
+            .as_ref()
+            .expect("rollout path"),
+    )?;
+    assert!(rollout.contains("retained-tool"));
+    assert!(rollout.contains("stream-tool"));
+    assert!(rollout.contains("stream-0"));
+    assert!(!rollout.contains("stream-99"));
+    assert!(!rollout.contains("must-not-run"));
+
+    assert!(turn(&test, "Continue").await?["context_pause"].is_null());
+    let input = third.single_request().input();
+    let retained_reasoning = rollout
+        .lines()
+        .map(|line| serde_json::from_str::<Value>(line).expect("rollout item"))
+        .filter(|row| row["type"] == "response_item" && row["payload"]["type"] == "reasoning")
+        .map(|row| row["payload"]["encrypted_content"].clone())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        input
+            .iter()
+            .filter(|item| item["type"] == "reasoning")
+            .map(|item| item["encrypted_content"].clone())
+            .collect::<Vec<_>>(),
+        retained_reasoning,
+    );
+    assert!(input.iter().any(|item| item["call_id"] == "retained-tool"));
+    assert!(input.iter().any(|item| {
+        item["type"] == "function_call_output" && item["call_id"] == "stream-tool"
+    }));
+    Ok(())
+}
+
 #[test_case("Write a handoff"; "handoff")]
 #[test_case("Continue the work"; "ordinary request")]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

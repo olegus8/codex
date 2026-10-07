@@ -65,11 +65,12 @@ class Responses:
                         }
                     ]
                 else:
+                    items = item if isinstance(item, list) else [item]
                     response = {
                         "id": "r" + str(len(fixture.requests)),
                         "object": "response",
                         "status": "completed",
-                        "output": [item],
+                        "output": items,
                         "usage": {
                             "input_tokens": used,
                             "output_tokens": 10,
@@ -79,11 +80,14 @@ class Responses:
                     events = [
                         {
                             "type": "response.output_item.done",
-                            "output_index": 0,
+                            "output_index": index,
                             "item": item,
-                        },
-                        {"type": "response.completed", "response": response},
+                        }
+                        for index, item in enumerate(items)
                     ]
+                    events.append(
+                        {"type": "response.completed", "response": response}
+                    )
                 data = "".join(
                     "event: "
                     + event["type"]

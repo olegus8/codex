@@ -592,7 +592,9 @@ pub(crate) async fn run_turn(
                 .await;
                 let needs_follow_up = model_needs_follow_up || has_pending_input;
                 super::context_window::publish_usage(&sess, &turn_context, &token_status).await;
-                if super::context_pause::maybe_pause(&sess, &turn_context, &token_status).await {
+                if super::context_pause::waiting_for_user(&sess).await
+                    || super::context_pause::maybe_pause(&sess, &turn_context, &token_status).await
+                {
                     last_agent_message = sampling_request_last_agent_message;
                     finish_context_paused_turn(
                         &sess,
@@ -2658,7 +2660,7 @@ async fn try_run_sampling_request(
         !sess.services.extensions.turn_item_contributors().is_empty();
     let mut active_item_is_streaming_to_client = false;
     let receiving_span = trace_span!("receiving_stream");
-    let outcome: CodexResult<SamplingRequestResult> = loop {
+    let outcome: CodexResult<SamplingRequestResult> = 'sampling: loop {
         let handle_responses = trace_span!(
             parent: &receiving_span,
             "handle_responses",
@@ -2720,6 +2722,7 @@ async fn try_run_sampling_request(
             .record_responses(&handle_responses, &event);
         record_turn_ttft_metric(&turn_context, &event).await;
 
+        let completed_item = matches!(&event, ResponseEvent::OutputItemDone(_));
         match event {
             ResponseEvent::Created { response_id } => {
                 if let Some(response_id) = response_id {
@@ -2728,7 +2731,7 @@ async fn try_run_sampling_request(
                         .insert(codex_api::ResponseId(response_id));
                 }
             }
-            ResponseEvent::OutputItemDone(mut item) => {
+            ResponseEvent::OutputItemDone(mut item) => 'item_done: {
                 assign_missing_streamed_response_item_id(&mut item, active_item.as_ref());
                 sess.reserve_assistant_message_order(&turn_context, &item)
                     .await;
@@ -2785,7 +2788,7 @@ async fn try_run_sampling_request(
                     )
                     .await
                 {
-                    continue;
+                    break 'item_done;
                 }
 
                 let mut ctx = HandleOutputCtx {
@@ -2825,7 +2828,7 @@ async fn try_run_sampling_request(
                         .await
                     {
                         Ok(output_result) => output_result,
-                        Err(err) => break Err(err),
+                        Err(err) => break 'sampling Err(err),
                     };
                 if let Some(tool_future) = output_result.tool_future {
                     in_flight.push_back(tool_future);
@@ -2843,7 +2846,7 @@ async fn try_run_sampling_request(
                         .enabled(Feature::DeferMailboxPreemption)
                     && sess.input_queue.has_pending_mailbox_items().await
                 {
-                    break Ok(SamplingRequestResult {
+                    break 'sampling Ok(SamplingRequestResult {
                         needs_follow_up: true,
                         last_agent_message,
                     });
@@ -3180,6 +3183,28 @@ async fn try_run_sampling_request(
                 } else {
                     error_or_panic("ReasoningRawContentDelta without active item".to_string());
                 }
+            }
+        }
+        if completed_item && !automatic_compaction_enabled(&turn_context) {
+            let status = super::context_window::usable_context_token_status(
+                &sess,
+                &turn_context,
+                &step_context.settings.model_info,
+            )
+            .await;
+            super::context_window::publish_usage(&sess, &turn_context, &status).await;
+            if status.full_context_window_limit_reached {
+                break Err(CodexErr::ContextWindowExceeded);
+            }
+            if super::context_pause::maybe_pause(&sess, &turn_context, &status).await {
+                if let Some(interrupt) = stream.interrupt.take() {
+                    let _ = interrupt.send(());
+                }
+                drop(stream);
+                break Ok(SamplingRequestResult {
+                    needs_follow_up,
+                    last_agent_message,
+                });
             }
         }
     };

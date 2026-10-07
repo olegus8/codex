@@ -323,6 +323,60 @@ def large_result(case):
     assert not any(row["type"] == "compacted" for row in case.history())
 
 
+def long_stream(case):
+    case.start()
+    case.fixture.add(tool("retained", case.transport, "RETAINED"), 120000)
+    reasoning = [
+        {
+            "type": "reasoning",
+            "id": f"stream-{index}",
+            "summary": [],
+            "encrypted_content": "x" * 3600,
+        }
+        for index in range(100)
+    ]
+    case.fixture.add(
+        [tool("inflight", case.transport, "INFLIGHT")]
+        + reasoning
+        + [tool("late", case.transport, "MUST_NOT_RUN")],
+        180000,
+    )
+    turn = case.turn("Complete the long multi-step task", 2, paused=True)
+    used = turn["contextPause"]["usedTokens"]
+    assert 133000 <= used < 133513, used
+    records = case.history()
+    saved = history_request(records)
+    retained(saved, "retained", "RETAINED")
+    retained(saved, "inflight", "INFLIGHT")
+    assert any(item.get("id") == "stream-0" for item in inputs(saved))
+    assert not any(item.get("id") == "stream-99" for item in inputs(saved))
+    assert "MUST_NOT_RUN" not in json.dumps(records)
+    counts = [
+        row["payload"]["info"]["last_token_usage"]["total_tokens"]
+        for row in records
+        if row["type"] == "event_msg"
+        and row["payload"]["type"] == "token_count"
+        and row["payload"].get("info")
+    ]
+    assert counts[-1] == 120010, counts[-1]
+    case.start(resume=case.thread)
+    case.fixture.add(message("CONTINUED"), 140000)
+    case.turn("Continue after restarting the paused client", 1)
+    request = case.fixture.requests[-1]
+    retained(request, "retained", "RETAINED")
+    retained(request, "inflight", "INFLIGHT")
+    assert [
+        item["encrypted_content"]
+        for item in inputs(request)
+        if item["type"] == "reasoning"
+    ] == [
+        item["encrypted_content"]
+        for item in inputs(saved)
+        if item["type"] == "reasoning"
+    ]
+    assert not any(row["type"] == "compacted" for row in case.history())
+
+
 def independent(case):
     first = None
     for index in range(2):
@@ -427,6 +481,14 @@ def main():
                 (
                     f"lifecycle-{hooks}-{transport}",
                     lifecycle,
+                    {"hooks": hooks, "transport": transport},
+                )
+            )
+        for transport in ("direct", "code"):
+            cases.append(
+                (
+                    f"long-stream-{hooks}-{transport}",
+                    long_stream,
                     {"hooks": hooks, "transport": transport},
                 )
             )
