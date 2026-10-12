@@ -53,9 +53,7 @@ fn map_api_error_details(err: ApiError) -> CodexErr {
         ApiError::QuotaExceeded => CodexErr::QuotaExceeded,
         ApiError::UsageNotIncluded => CodexErr::UsageNotIncluded,
         ApiError::Retryable { message, .. } => CodexErr::Stream(message),
-        ApiError::ServerError { message } => {
-            CodexErr::new(CodexErrorDetails::ServerError(message))
-        }
+        ApiError::ServerError { message } => CodexErr::new(CodexErrorDetails::ServerError(message)),
         ApiError::RateLimitExceeded { message, .. } => {
             CodexErr::new(CodexErrorDetails::RateLimitExceeded(message))
         }

@@ -46,10 +46,7 @@ fn reasoning_ids(request: &ResponsesRequest) -> Vec<String> {
 #[test_case(1, &["rs_past"]; "after one failure")]
 #[test_case(2, &[]; "after two failures")]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn repeated_server_errors_omit_past_reasoning(
-    failures: usize,
-    kept: &[&str],
-) -> Result<()> {
+async fn repeated_server_errors_omit_past_reasoning(failures: usize, kept: &[&str]) -> Result<()> {
     skip_if_no_network!(Ok(()));
     let server = start_mock_server().await;
     mount_sse_once(
