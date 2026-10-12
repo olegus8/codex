@@ -79,6 +79,8 @@ pub(crate) struct SessionState {
     pub(crate) latest_rate_limits: Option<RateLimitSnapshot>,
     pub(crate) latest_token_usage_record: Option<TokenUsageRecord>,
     pub(crate) server_reasoning_included: bool,
+    /// Reasoning item IDs left out of sampling requests after the server repeatedly failed them.
+    pub(crate) omitted_reasoning_ids: HashSet<String>,
     pub(crate) mcp_dependency_prompted: HashSet<String>,
     pub(crate) additional_context: AdditionalContextStore,
     /// Settings used by the latest regular user turn, used for turn-to-turn
@@ -131,6 +133,7 @@ impl SessionState {
             latest_rate_limits: None,
             latest_token_usage_record: None,
             server_reasoning_included: false,
+            omitted_reasoning_ids: HashSet::new(),
             mcp_dependency_prompted: HashSet::new(),
             additional_context: AdditionalContextStore::default(),
             previous_turn_settings: None,

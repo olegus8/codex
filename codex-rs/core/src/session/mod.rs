@@ -125,6 +125,7 @@ use codex_protocol::models::ImageReference;
 use codex_protocol::models::InternalChatMessageMetadataPassthrough;
 use codex_protocol::models::PermissionProfile;
 use codex_protocol::models::SandboxEnforcement;
+use codex_protocol::openai_models::InputModality;
 use codex_protocol::openai_models::ModelInfo;
 use codex_protocol::openai_models::ModelPreset;
 use codex_protocol::permissions::FileSystemSandboxPolicy;
@@ -4597,6 +4598,39 @@ impl Session {
     pub(crate) async fn clone_history(&self) -> ContextManager {
         let state = self.state.lock().await;
         state.clone_history()
+    }
+
+    /// Prompt input from history, without reasoning the server repeatedly failed to process.
+    pub(crate) async fn sampling_input(
+        &self,
+        input_modalities: &[InputModality],
+    ) -> Vec<ResponseItem> {
+        let (history, omitted) = {
+            let state = self.state.lock().await;
+            (state.clone_history(), state.omitted_reasoning_ids.clone())
+        };
+        let mut input = history.for_prompt(input_modalities);
+        input.retain(|item| match item {
+            ResponseItem::Reasoning { id: Some(id), .. } => !omitted.contains(id.as_str()),
+            _ => true,
+        });
+        input
+    }
+
+    /// Leaves every reasoning item now in history out of later sampling requests.
+    pub(crate) async fn omit_past_reasoning(&self) -> usize {
+        let mut state = self.state.lock().await;
+        let ids = state
+            .history
+            .raw_items()
+            .filter_map(|item| match item {
+                ResponseItem::Reasoning { id: Some(id), .. } => Some(id.to_string()),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        let before = state.omitted_reasoning_ids.len();
+        state.omitted_reasoning_ids.extend(ids);
+        state.omitted_reasoning_ids.len() - before
     }
 
     /// Captures the history lifetime without exposing mutable session state.
