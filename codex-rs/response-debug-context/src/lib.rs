@@ -79,6 +79,7 @@ pub fn telemetry_api_error_message(error: &ApiError) -> String {
         ApiError::QuotaExceeded => "quota exceeded".to_string(),
         ApiError::UsageNotIncluded => "usage not included".to_string(),
         ApiError::Retryable { .. } => "retryable error".to_string(),
+        ApiError::ServerError { .. } => "server error".to_string(),
         ApiError::RateLimitExceeded { .. } => "rate limit exceeded".to_string(),
         ApiError::RateLimit(_) => "rate limit".to_string(),
         ApiError::InvalidRequest { .. } | ApiError::InvalidPrompt { .. } => {

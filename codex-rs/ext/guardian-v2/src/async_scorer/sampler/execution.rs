@@ -52,6 +52,7 @@ impl SamplingExecution {
             LunaSamplerError::ConnectionTimeout
             | LunaSamplerError::Api(
                 ApiError::Retryable { .. }
+                | ApiError::ServerError { .. }
                 | ApiError::RateLimitExceeded { .. }
                 | ApiError::Stream(_)
                 | ApiError::ServerOverloaded { .. }

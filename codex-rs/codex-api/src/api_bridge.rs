@@ -28,6 +28,7 @@ pub fn map_api_error(err: ApiError) -> CodexErr {
         ApiError::Transport(_)
         | ApiError::Api { .. }
         | ApiError::Stream(_)
+        | ApiError::ServerError { .. }
         | ApiError::ContextWindowExceeded
         | ApiError::QuotaExceeded
         | ApiError::UsageNotIncluded
@@ -52,6 +53,9 @@ fn map_api_error_details(err: ApiError) -> CodexErr {
         ApiError::QuotaExceeded => CodexErr::QuotaExceeded,
         ApiError::UsageNotIncluded => CodexErr::UsageNotIncluded,
         ApiError::Retryable { message, .. } => CodexErr::Stream(message),
+        ApiError::ServerError { message } => {
+            CodexErr::new(CodexErrorDetails::ServerError(message))
+        }
         ApiError::RateLimitExceeded { message, .. } => {
             CodexErr::new(CodexErrorDetails::RateLimitExceeded(message))
         }

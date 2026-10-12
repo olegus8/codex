@@ -1125,6 +1125,27 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn server_error_is_kept_apart_from_other_retryable_errors() {
+        let message = "An error occurred while processing your request.";
+        let error = format!(
+            r#"{{"type":"error","sequence_number":2,"error":{{"message":"{message}","type":"server_error","param":null,"code":"server_error"}}}}"#
+        );
+        let failed = format!(
+            r#"{{"type":"response.failed","sequence_number":3,"response":{{"id":"resp_server_error","object":"response","status":"failed","output":[],"error":{{"code":"server_error","message":"{message}"}}}}}}"#
+        );
+        let sse1 = format!("event: error\ndata: {error}\n\n");
+        let sse2 = format!("event: response.failed\ndata: {failed}\n\n");
+
+        let events = collect_events(&[sse1.as_bytes(), sse2.as_bytes()]).await;
+
+        assert_eq!(events.len(), 1);
+        assert_matches!(
+            &events[0],
+            Err(ApiError::ServerError { message: actual }) if actual == message
+        );
+    }
+
+    #[tokio::test]
     async fn cyber_policy_error_is_fatal() {
         let raw_error = r#"{"type":"response.failed","sequence_number":3,"response":{"id":"resp_fatal_cyber","object":"response","created_at":1759771626,"status":"failed","background":false,"error":{"code":"cyber_policy","message":"This request was flagged for cyber policy."},"incomplete_details":null}}"#;
 

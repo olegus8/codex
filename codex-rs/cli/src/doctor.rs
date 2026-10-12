@@ -2433,6 +2433,7 @@ fn websocket_error_detail(err: &ApiError) -> String {
         | ApiError::QuotaExceeded
         | ApiError::UsageNotIncluded
         | ApiError::Retryable { .. }
+        | ApiError::ServerError { .. }
         | ApiError::RateLimitExceeded { .. }
         | ApiError::RateLimit(_)
         | ApiError::InvalidRequest { .. }

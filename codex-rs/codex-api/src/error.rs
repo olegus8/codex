@@ -25,6 +25,8 @@ pub enum ApiError {
         message: String,
         retry_after: Option<RetryAfter>,
     },
+    #[error("server error: {message}")]
+    ServerError { message: String },
     #[error("rate limit exceeded: {message}")]
     RateLimitExceeded {
         message: String,

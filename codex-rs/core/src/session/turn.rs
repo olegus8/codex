@@ -140,6 +140,9 @@ use tracing::warn;
 
 const POST_SAMPLING_TOKEN_ESTIMATE_TARGET: &str = "codex_core::post_sampling_token_estimate";
 
+/// The server can keep failing a request because of a reasoning item it emitted earlier.
+const SERVER_ERRORS_BEFORE_OMITTING_REASONING: u32 = 2;
+
 /// Explicit MCP startup requirements retained across restarts within one user turn.
 #[derive(Default)]
 pub(crate) struct McpStartupRequirements {
@@ -528,13 +531,10 @@ pub(crate) async fn run_turn(
             }
 
             // Construct the input that we will send to the model.
-            let sampling_request_input: Vec<ResponseItem> = async {
-                sess.clone_history()
-                    .await
-                    .for_prompt(&step_context.settings.model_info.input_modalities)
-            }
-            .instrument(trace_span!("run_turn.prepare_sampling_request_input"))
-            .await;
+            let sampling_request_input: Vec<ResponseItem> = sess
+                .sampling_input(&step_context.settings.model_info.input_modalities)
+                .instrument(trace_span!("run_turn.prepare_sampling_request_input"))
+                .await;
 
             run_sampling_request(
                 Arc::clone(&sess),
@@ -1699,6 +1699,7 @@ async fn run_sampling_request(
     );
     let max_retries = turn_context.provider.info().stream_max_retries();
     let mut retry_state = ResponsesStreamRetryState::default();
+    let mut consecutive_server_errors = 0;
     let mut initial_input = Some(input);
     let mut original_input = None;
     let mut executed_tool_calls_by_output = HashMap::new();
@@ -1708,9 +1709,8 @@ async fn run_sampling_request(
         let prompt_input = if let Some(input) = initial_input.take() {
             input
         } else {
-            sess.clone_history()
+            sess.sampling_input(&step_context.settings.model_info.input_modalities)
                 .await
-                .for_prompt(&step_context.settings.model_info.input_modalities)
         };
         let mut prompt_input = prompt_input;
         sess.services
@@ -1766,6 +1766,20 @@ async fn run_sampling_request(
         };
 
         let original_input = original_input.get_or_insert(prompt.input);
+
+        if matches!(err.details(), CodexErrorDetails::ServerError(_)) {
+            consecutive_server_errors += 1;
+            if consecutive_server_errors == SERVER_ERRORS_BEFORE_OMITTING_REASONING {
+                let omitted = sess.omit_past_reasoning().await;
+                warn!(
+                    turn_id = %turn_context.sub_id,
+                    omitted,
+                    "server repeatedly failed the request; omitting past reasoning"
+                );
+            }
+        } else {
+            consecutive_server_errors = 0;
+        }
 
         let retry = handle_response_stream_error(
             &mut retry_state,

@@ -48,6 +48,7 @@ pub(super) fn sampler_failure_reason(error: &LunaSamplerError) -> &'static str {
             ApiError::QuotaExceeded => "quota_exceeded",
             ApiError::UsageNotIncluded => "usage_not_included",
             ApiError::Retryable { .. } => "retryable_api_error",
+            ApiError::ServerError { .. } => "server_error",
             ApiError::RateLimitExceeded { .. } | ApiError::RateLimit(_) => "rate_limit",
             ApiError::InvalidRequest { .. } | ApiError::InvalidPrompt { .. } => "invalid_request",
             ApiError::CyberPolicy { .. }
