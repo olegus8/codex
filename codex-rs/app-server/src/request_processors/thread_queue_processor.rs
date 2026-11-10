@@ -231,6 +231,7 @@ impl ThreadQueueRequestProcessor {
             .await;
         Ok(ThreadQueueStartResponse {
             turn: Turn {
+                context_pause: None,
                 id: turn_id,
                 root_turn_id: Some(root_turn_id),
                 items: vec![],

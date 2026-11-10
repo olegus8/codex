@@ -74,6 +74,7 @@ pub(super) async fn page_turn_rows(
     started_at,
     completed_at,
     duration_ms,
+    context_pause_json,
     first_user_item_id,
     final_agent_item_id
 FROM thread_turns

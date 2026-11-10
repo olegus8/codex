@@ -230,6 +230,7 @@ impl ChatWidget {
                     TurnCompletedNotification {
                         thread_id: self.thread_id.map(|id| id.to_string()).unwrap_or_default(),
                         turn: Turn {
+                            context_pause: None,
                             id: turn_id,
                             root_turn_id,
                             items_view: codex_app_server_protocol::TurnItemsView::NotLoaded,

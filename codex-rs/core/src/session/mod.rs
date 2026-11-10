@@ -246,6 +246,7 @@ use codex_protocol::exec_output::StreamOutput;
 pub(crate) mod async_compaction;
 mod code_mode_warning;
 mod config_refresh;
+pub(crate) mod context_pause;
 pub(crate) mod context_window;
 mod daemon_recovery;
 mod environment;
@@ -1710,6 +1711,8 @@ impl Session {
             InitialHistory::Resumed(resumed_history) => {
                 let turn_context = self.new_default_turn().await;
                 let rollout_items = resumed_history.history;
+                self.state.lock().await.context_pause =
+                    context_pause::ContextPauseState::restore(self.thread_id(), &rollout_items);
                 if matches!(
                     rollout_items.iter().rev().find_map(|item| match item {
                         RolloutItem::EventMsg(event) => agent_status_from_event(event),
@@ -4644,6 +4647,7 @@ impl Session {
                 compaction_response_id: metadata.compaction_response_id,
                 latest_token_usage_record: state.latest_token_usage_record.clone(),
                 resume_metadata: Some(CompactionResumeMetadata {
+                    context_pause: state.context_pause.checkpoint(self.thread_id()),
                     dynamic_tools: Some(Box::new(DynamicToolsSnapshot {
                         thread_id: self.thread_id(),
                         tools: state.persisted_dynamic_tools.to_vec(),
