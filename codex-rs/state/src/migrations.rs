@@ -2,6 +2,7 @@ use std::borrow::Cow;
 
 use crate::sqlite::SqlitePoolWriteExt;
 use crate::sqlite::SqliteWriteQueryExt;
+use sqlx::SqlStr;
 use sqlx::migrate::Migration;
 use sqlx::migrate::MigrationType;
 use sqlx::migrate::Migrator;
@@ -141,7 +142,7 @@ pub(crate) async fn repair_legacy_thread_history_migrations(
         1,
         Cow::Borrowed("context pause"),
         MigrationType::Simple,
-        Cow::Borrowed(CONTEXT_PAUSE_SQL),
+        SqlStr::from_static(CONTEXT_PAUSE_SQL),
         /*no_tx*/ false,
     );
     let Some(version) = sqlx::query_scalar::<_, i64>(

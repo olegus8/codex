@@ -2,6 +2,7 @@ use codex_utils_absolute_path::test_support::PathExt;
 use pretty_assertions::assert_eq;
 use sqlx::Connection;
 use sqlx::Row;
+use sqlx::SqlStr;
 use sqlx::migrate::Migration;
 use sqlx::migrate::Migrator;
 use std::borrow::Cow;
@@ -51,7 +52,7 @@ async fn check_context_pause_migration(
             pause_version,
             Cow::Borrowed("context pause"),
             migrations[0].migration_type,
-            Cow::Borrowed("ALTER TABLE thread_turns ADD COLUMN context_pause_json TEXT;\n"),
+            SqlStr::from_static("ALTER TABLE thread_turns ADD COLUMN context_pause_json TEXT;\n"),
             /*no_tx*/ false,
         ));
         migrations.sort_by_key(|migration| migration.version);
