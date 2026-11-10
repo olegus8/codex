@@ -19,7 +19,10 @@ use test_case::test_case;
 #[test_case(118_000, false; "below threshold with thread flag")]
 #[test_case(127_000, false; "above threshold with thread flag")]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn context_policy_counts_past_reasoning_once(used: i64, disable_with_config: bool) -> Result<()> {
+async fn context_policy_counts_past_reasoning_once(
+    used: i64,
+    disable_with_config: bool,
+) -> Result<()> {
     skip_if_no_network!(Ok(()));
     const WINDOW: i64 = 180_000;
     const REMAINING_CALL: &str = "remaining-context";
