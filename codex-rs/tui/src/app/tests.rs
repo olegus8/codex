@@ -8910,6 +8910,7 @@ async fn prompt_edit_reverts_earlier_and_first_visible_prompts_in_place_scenario
                 completed_at_ms: 0,
             })),
             RolloutItem::EventMsg(EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 root_turn_id: None,
                 turn_id: turn_id.to_string(),
                 last_agent_message: None,

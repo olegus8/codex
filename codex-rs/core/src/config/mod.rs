@@ -655,6 +655,9 @@ pub struct Config {
     /// Size of the context window for the model, in tokens.
     pub model_context_window: Option<i64>,
 
+    /// Percentage of the usable context window at which a thread pauses once.
+    pub model_context_pause_percent: Option<u8>,
+
     /// Token usage threshold triggering auto-compaction of conversation history.
     pub model_auto_compact_token_limit: Option<i64>,
 
@@ -3383,6 +3386,15 @@ impl Config {
                 )
             })?;
         }
+        if cfg
+            .model_context_pause_percent
+            .is_some_and(|percent| !(1..=99).contains(&percent))
+        {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "model_context_pause_percent must be between 1 and 99",
+            ));
+        }
         if cfg.model_post_turn_compact_threshold_percent.is_some_and(|percent| percent > 100) {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
@@ -4535,6 +4547,7 @@ impl Config {
             service_tier,
             review_model,
             model_context_window: cfg.model_context_window,
+            model_context_pause_percent: cfg.model_context_pause_percent,
             model_auto_compact_token_limit: cfg.model_auto_compact_token_limit,
             model_auto_compact_token_limit_scope: cfg
                 .model_auto_compact_token_limit_scope

@@ -333,6 +333,9 @@ pub(super) fn queue_error(error: QueueServiceError) -> JSONRPCErrorError {
         QueueServiceError::Storage(ThreadStoreError::InvalidRequest { message }) => {
             invalid_request(message)
         }
+        QueueServiceError::CoreSubmissionError(codex_protocol::error::CodexErr::InvalidRequest(
+            message,
+        )) => invalid_request(message),
         error => internal_error(format!("queued submission operation failed: {error}")),
     }
 }

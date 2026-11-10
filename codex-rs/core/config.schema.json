@@ -8393,6 +8393,13 @@
       ],
       "description": "Optional path to a JSON model catalog (applied on startup only). Per-thread `config` overrides are accepted but do not reapply this (no-ops)."
     },
+    "model_context_pause_percent": {
+      "description": "Percentage of the usable context window at which a thread pauses once.",
+      "format": "uint8",
+      "maximum": 99.0,
+      "minimum": 1.0,
+      "type": "integer"
+    },
     "model_context_window": {
       "description": "Size of the context window for the model, in tokens.",
       "format": "int64",

@@ -179,6 +179,10 @@ pub struct ConfigToml {
     /// Size of the context window for the model, in tokens.
     pub model_context_window: Option<i64>,
 
+    /// Percentage of the usable context window at which a thread pauses once.
+    #[schemars(range(min = 1, max = 99))]
+    pub model_context_pause_percent: Option<u8>,
+
     /// Token usage threshold triggering auto-compaction of conversation history.
     pub model_auto_compact_token_limit: Option<i64>,
 

@@ -192,6 +192,7 @@ async fn mark_thread_completed(thread: &CodexThread) {
         .send_event(
             turn.as_ref(),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 root_turn_id: None,
                 turn_id: turn.sub_id.clone(),
                 started_at: None,

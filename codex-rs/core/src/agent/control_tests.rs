@@ -626,6 +626,7 @@ async fn on_event_updates_status_from_task_complete() {
         ),
     ] {
         let status = agent_status_from_event(&EventMsg::TurnComplete(TurnCompleteEvent {
+            context_pause: None,
             root_turn_id: None,
             turn_id: "turn-1".to_string(),
             started_at: None,
@@ -2699,6 +2700,7 @@ async fn spawn_agent_fork_sanitizes_inherited_compaction_metadata() {
 
     let (parent_thread_id, parent_thread) = harness.start_paginated_thread().await;
     let parent_resume_metadata = codex_history::CompactionResumeMetadata {
+        context_pause: None,
         dynamic_tools: None,
         multi_agent_version: Some(MultiAgentVersion::V2),
         last_started_turn_id: Some("parent-turn".to_string()),
@@ -2833,6 +2835,7 @@ async fn spawn_agent_fork_sanitizes_inherited_compaction_metadata() {
     assert_eq!(
         inherited_resume_metadata,
         &codex_history::CompactionResumeMetadata {
+            context_pause: None,
             multi_agent_version: Some(MultiAgentVersion::V1),
             turn_attribution: None,
             ..parent_resume_metadata
@@ -3857,6 +3860,7 @@ async fn spawn_agent_full_fork_legacy_compaction_rebuilds_child_instructions_onc
                 compaction_response_id: None,
                 latest_token_usage_record: None,
                 resume_metadata: Some(codex_history::CompactionResumeMetadata {
+                    context_pause: None,
                     dynamic_tools: None,
                     multi_agent_version: Some(MultiAgentVersion::V2),
                     last_started_turn_id: None,
@@ -3992,6 +3996,7 @@ async fn spawn_agent_full_fork_legacy_compaction_rebuilds_child_instructions_onc
         assert_eq!(
             inherited_state,
             Some(codex_history::CompactionResumeMetadata {
+                context_pause: None,
                 dynamic_tools: None,
                 multi_agent_version: Some(MultiAgentVersion::V2),
                 last_started_turn_id: None,
@@ -4564,6 +4569,7 @@ async fn multi_agent_v2_completion_ignores_dead_direct_parent() {
         .send_event(
             tester_turn.as_ref(),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 root_turn_id: None,
                 turn_id: tester_turn.sub_id.clone(),
                 started_at: None,
@@ -4647,6 +4653,7 @@ async fn multi_agent_v2_completion_queues_message_for_direct_parent() {
         .send_event(
             tester_turn.as_ref(),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 root_turn_id: None,
                 turn_id: tester_turn.sub_id.clone(),
                 started_at: None,
