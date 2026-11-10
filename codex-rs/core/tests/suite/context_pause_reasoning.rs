@@ -14,10 +14,12 @@ use core_test_support::test_codex::test_codex;
 use pretty_assertions::assert_eq;
 use test_case::test_case;
 
-#[test_case(118_000, false; "below threshold")]
-#[test_case(127_000, true; "above threshold")]
+#[test_case(118_000, true; "below threshold with config switch")]
+#[test_case(127_000, true; "above threshold with config switch")]
+#[test_case(118_000, false; "below threshold with thread flag")]
+#[test_case(127_000, false; "above threshold with thread flag")]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn context_policy_counts_past_reasoning_once(used: i64, crosses_threshold: bool) -> Result<()> {
+async fn context_policy_counts_past_reasoning_once(used: i64, disable_with_config: bool) -> Result<()> {
     skip_if_no_network!(Ok(()));
     const WINDOW: i64 = 180_000;
     const REMAINING_CALL: &str = "remaining-context";
@@ -49,14 +51,17 @@ async fn context_policy_counts_past_reasoning_once(used: i64, crosses_threshold:
             model.effective_context_window_percent = 90;
             model.auto_compact_token_limit = Some(WINDOW);
         })
-        .with_config(|config| {
+        .with_config(move |config| {
             config.features.enable(Feature::TokenBudget).unwrap();
+            config.model_auto_compact_enabled = !disable_with_config;
         })
         .build(&server)
         .await?;
-    test.codex
-        .thread_extension_data()
-        .insert(AutoCompactionDisabled);
+    if !disable_with_config {
+        test.codex
+            .thread_extension_data()
+            .insert(AutoCompactionDisabled);
+    }
 
     test.submit_turn("Do the work").await?;
     test.submit_turn("Check remaining context").await?;
@@ -74,6 +79,6 @@ async fn context_policy_counts_past_reasoning_once(used: i64, crosses_threshold:
         .parse()?;
     let measured = WINDOW - remaining;
     assert!((used..used + 1_000).contains(&measured), "{measured}");
-    assert_eq!(measured * 100 >= WINDOW * 70, crosses_threshold);
+    assert_eq!(measured * 100 >= WINDOW * 70, used * 100 >= WINDOW * 70);
     Ok(())
 }
