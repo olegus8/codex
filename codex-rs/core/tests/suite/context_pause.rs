@@ -3,6 +3,7 @@ use codex_config::LoaderOverrides;
 use codex_core::StartThreadOptions;
 use codex_core::TurnInputRequest;
 use codex_core::TurnInputSubmission;
+use codex_core::TurnStartOptions;
 use codex_core::config::ConfigBuilder;
 use codex_features::Feature;
 use codex_protocol::dynamic_tools::DynamicToolCallOutputContentItem;
@@ -296,6 +297,20 @@ async fn context_pause_outlasts_idle_starts_manual_compaction_and_restart() -> R
     let test = factory.build_with_auto_env(&server).await?;
     assert!(turn(&test, "Save my work").await?["context_pause"].is_object());
     assert_idle_start_refused(&test).await;
+    let heartbeat = TurnInputRequest::user_input(vec![UserInput::Text {
+        text: "Scheduled work".into(),
+        text_elements: Vec::new(),
+    }])
+    .on_start(TurnStartOptions {
+        turn_trigger: Some("automation_heartbeat_scheduled".to_string()),
+        ..Default::default()
+    });
+    let error = test
+        .codex
+        .start_or_steer_turn(heartbeat)
+        .await
+        .expect_err("a scheduled heartbeat cannot answer the pause");
+    assert!(error.to_string().contains("explicit user input"), "{error}");
     test.codex.submit(Op::Compact).await?;
     wait_for_event(&test.codex, |event| {
         matches!(event, EventMsg::TurnComplete(_))
@@ -378,7 +393,10 @@ async fn context_pause_runs_stop_hooks_without_continuing() -> Result<()> {
         })
         .with_config(trust_discovered_hooks)
         .with_config(move |config| {
-            config.notify = Some(vec![python.to_string(), notify_script.display().to_string()]);
+            config.notify = Some(vec![
+                python.to_string(),
+                notify_script.display().to_string(),
+            ]);
         })
         .build_with_auto_env(&server)
         .await?;

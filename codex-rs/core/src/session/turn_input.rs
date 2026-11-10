@@ -408,11 +408,11 @@ async fn start_or_steer(
             settings.required_active_final_output_json_schema(),
             responsesapi_client_metadata.clone(),
             input_metadata,
+            answers_pause,
         )
         .await
     {
         Ok((turn_id, root_turn_id)) => {
-            context_pause::acknowledge_user_input(session, answers_pause).await;
             settings.apply_steered(session, submission_id).await?;
             Ok(TurnInputSubmission::Steered {
                 turn_id,
@@ -702,11 +702,11 @@ async fn steer(
             settings.required_active_final_output_json_schema(),
             responsesapi_client_metadata,
             input_metadata,
+            answers_pause,
         )
         .await
     {
         Ok((turn_id, root_turn_id)) => {
-            context_pause::acknowledge_user_input(session, answers_pause).await;
             settings.apply_steered(session, submission_id).await?;
             Ok(TurnInputSubmission::Steered {
                 turn_id,
@@ -891,6 +891,7 @@ impl Session {
         required_final_output_json_schema: Option<&Value>,
         responsesapi_client_metadata: ResponsesApiClientMetadataUpdate,
         input_metadata: UserInputMetadata,
+        answers_pause: bool,
     ) -> Result<(String, String), NotSubmittedReason> {
         let mut active = self.active_turn.lock().await;
         let Some(active_turn) = active.as_mut() else {
@@ -972,6 +973,7 @@ impl Session {
                 pending_input,
             )
             .await;
+        context_pause::acknowledge_user_input(self, answers_pause).await;
         Ok((
             active_turn_id.clone(),
             active_task.turn_context.root_turn_id(),

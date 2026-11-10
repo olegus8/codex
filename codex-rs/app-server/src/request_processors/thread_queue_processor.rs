@@ -29,6 +29,7 @@ use codex_core::StartIfIdleSubmission;
 use codex_core::ThreadManager;
 use codex_core::TurnInput;
 use codex_protocol::ThreadId;
+use codex_protocol::error::CodexErrorDetails;
 use codex_protocol::protocol::SessionSource;
 use codex_protocol::protocol::SubAgentSource;
 use codex_queue_extension::QueueServiceError;
@@ -333,9 +334,11 @@ pub(super) fn queue_error(error: QueueServiceError) -> JSONRPCErrorError {
         QueueServiceError::Storage(ThreadStoreError::InvalidRequest { message }) => {
             invalid_request(message)
         }
-        QueueServiceError::CoreSubmissionError(codex_protocol::error::CodexErr::InvalidRequest(
-            message,
-        )) => invalid_request(message),
+        QueueServiceError::CoreSubmissionError(error)
+            if matches!(error.details(), CodexErrorDetails::InvalidRequest(_)) =>
+        {
+            invalid_request(error.to_string())
+        }
         error => internal_error(format!("queued submission operation failed: {error}")),
     }
 }

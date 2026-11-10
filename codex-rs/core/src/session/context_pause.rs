@@ -46,13 +46,16 @@ impl ContextPauseState {
                         state.waiting_for_user = !pause.resumed_by_user;
                     }
                 }
-                RolloutItem::ResponseItem(envelope)
-                    if matches!(&envelope.item, ResponseItem::Message { role, .. } if role == "user") =>
+                RolloutItem::ResponseItem(envelope) if matches!(&envelope.item, ResponseItem::Message { role, .. } if role == "user") =>
                 {
                     input_origin = UserInputOrigin::from_message(&envelope.item);
                 }
                 RolloutItem::EventMsg(EventMsg::EnteredReviewMode(_)) => in_review = true,
                 RolloutItem::EventMsg(EventMsg::ExitedReviewMode(_)) => in_review = false,
+                RolloutItem::EventMsg(EventMsg::TurnStarted(_)) => {
+                    in_review = false;
+                    input_origin = UserInputOrigin::User;
+                }
                 RolloutItem::EventMsg(EventMsg::UserMessage(_)) => {
                     state.waiting_for_user &= in_review || !input_origin.is_user();
                     input_origin = UserInputOrigin::User;

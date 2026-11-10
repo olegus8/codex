@@ -2608,7 +2608,8 @@ impl Session {
                 .analytics_events_client
                 .track_guardian_session_event(self.thread_id, &event);
         }
-        self.send_event_raw_with_persistence(event, !persists_pause).await;
+        self.send_event_raw_with_persistence(event, !persists_pause)
+            .await;
         self.maybe_notify_parent_of_terminal_turn(turn_context, &legacy_source)
             .await;
         self.maybe_mirror_event_text_to_realtime(&legacy_source)
