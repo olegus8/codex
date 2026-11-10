@@ -1,5 +1,6 @@
 use super::session::Session;
 use super::turn_context::TurnContext;
+use crate::compact::AutoCompactionDisabled;
 use crate::config::Config;
 use codex_protocol::config_types::AutoCompactTokenLimitScope;
 use codex_protocol::openai_models::ModelInfo;
@@ -55,7 +56,17 @@ async fn context_window_token_status_with_config(
     config: &Config,
     model_info: &ModelInfo,
 ) -> ContextWindowTokenStatus {
-    let active_context_tokens = sess.get_total_token_usage().await;
+    let active_context_tokens = if sess
+        .services
+        .thread_extension_data
+        .get::<AutoCompactionDisabled>()
+        .is_some()
+    {
+        // Provider usage already covers the prior reasoning sent in its request.
+        sess.get_reported_token_usage().await
+    } else {
+        sess.get_total_token_usage().await
+    };
 
     // Count either the full active context or only the tokens added after the initial prefix.
     let (auto_compact_scope_tokens, auto_compact_scope_limit, auto_compact_window_prefill_tokens) =

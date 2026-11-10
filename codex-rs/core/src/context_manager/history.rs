@@ -1004,16 +1004,25 @@ impl ContextManager {
     }
 
     pub(crate) fn get_total_token_usage(&self) -> i64 {
+        self.context_token_usage(/*assume_reported_reasoning_included*/ false)
+    }
+
+    pub(crate) fn get_reported_token_usage(&self) -> i64 {
+        self.context_token_usage(/*assume_reported_reasoning_included*/ true)
+    }
+
+    fn context_token_usage(&self, assume_reported_reasoning_included: bool) -> i64 {
         let last_tokens = self
             .token_info
             .as_ref()
             .map(|info| info.last_token_usage.total_tokens)
             .unwrap_or(0);
         let unreported_tokens = self.estimated_tokens_since_last_usage();
-        if self
-            .token_info
-            .as_ref()
-            .is_some_and(|info| info.last_usage_includes_reasoning == Some(true))
+        if (assume_reported_reasoning_included && last_tokens > 0)
+            || self
+                .token_info
+                .as_ref()
+                .is_some_and(|info| info.last_usage_includes_reasoning == Some(true))
         {
             last_tokens.saturating_add(unreported_tokens)
         } else {
