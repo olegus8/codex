@@ -1,6 +1,9 @@
 use std::borrow::Cow;
 
+use crate::sqlite::SqlitePoolWriteExt;
 use crate::sqlite::SqliteWriteQueryExt;
+use sqlx::migrate::Migration;
+use sqlx::migrate::MigrationType;
 use sqlx::migrate::Migrator;
 use sqlx_sqlite::SqlitePool;
 
@@ -11,6 +14,10 @@ pub(crate) static MEMORIES_MIGRATOR: Migrator = sqlx_macros::migrate!("./memory_
 pub(crate) static QUEUE_MIGRATOR: Migrator = sqlx_macros::migrate!("./queue_migrations");
 pub(crate) static THREAD_HISTORY_MIGRATOR: Migrator =
     sqlx_macros::migrate!("./thread_history_migrations");
+
+// Keep the legacy SQL byte-for-byte so its SQLx checksum identifies both releases.
+const CONTEXT_PAUSE_SQL: &str = "ALTER TABLE thread_turns ADD COLUMN context_pause_json TEXT;\n";
+const FORK_THREAD_HISTORY_MIGRATIONS: &str = "_codex_fork_thread_history_migrations";
 
 /// Allow an older Codex binary to open a database that has already been
 /// migrated by a newer binary running in parallel.
@@ -116,6 +123,106 @@ WHERE version = ?
     .execute_with_busy_retry(pool)
     .await?;
     Ok(())
+}
+
+/// Vacate the upstream version used by an older context-pause release.
+pub(crate) async fn repair_legacy_thread_history_migrations(
+    pool: &SqlitePool,
+    migrator: &Migrator,
+) -> anyhow::Result<()> {
+    let Some(lifecycle) = migrator.migrations.iter().find(|migration| migration.version == 7)
+    else {
+        return Ok(());
+    };
+    if !migration_table_exists(pool, "_sqlx_migrations").await? {
+        return Ok(());
+    }
+    let pause = Migration::new(
+        1,
+        Cow::Borrowed("context pause"),
+        MigrationType::Simple,
+        Cow::Borrowed(CONTEXT_PAUSE_SQL),
+        /*no_tx*/ false,
+    );
+    let Some(version) = sqlx::query_scalar::<_, i64>(
+        "SELECT version FROM _sqlx_migrations \
+         WHERE version IN (7, 8) AND checksum = ? AND success",
+    )
+    .bind(pause.checksum.as_ref())
+    .fetch_optional(pool)
+    .await?
+    else {
+        return Ok(());
+    };
+
+    let mut transaction = pool.begin_immediate().await?;
+    let removed = sqlx::query(
+        "DELETE FROM _sqlx_migrations WHERE version = ? AND checksum = ? AND success",
+    )
+    .bind(version)
+    .bind(pause.checksum.as_ref())
+    .execute(&mut *transaction)
+    .await?;
+    if version == 7 && removed.rows_affected() == 1 {
+        sqlx::query(
+            "UPDATE _sqlx_migrations SET version = 7, description = ? \
+             WHERE version = 8 AND checksum = ? AND success",
+        )
+        .bind(lifecycle.description.as_ref())
+        .bind(lifecycle.checksum.as_ref())
+        .execute(&mut *transaction)
+        .await?;
+    }
+    transaction.commit().await?;
+    Ok(())
+}
+
+/// Apply the fork schema after SQLx has applied upstream's migrations.
+pub(crate) async fn migrate_fork_thread_history(pool: &SqlitePool) -> anyhow::Result<()> {
+    if migration_table_exists(pool, FORK_THREAD_HISTORY_MIGRATIONS).await?
+        && sqlx::query_scalar::<_, i64>(
+            "SELECT 1 FROM _codex_fork_thread_history_migrations WHERE version = 1",
+        )
+        .fetch_optional(pool)
+        .await?
+        .is_some()
+    {
+        return Ok(());
+    }
+
+    let mut transaction = pool.begin_immediate().await?;
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS _codex_fork_thread_history_migrations \
+         (version INTEGER PRIMARY KEY)",
+    )
+    .execute(&mut *transaction)
+    .await?;
+    let has_pause_column = sqlx::query_scalar::<_, i64>(
+        "SELECT 1 FROM pragma_table_info('thread_turns') WHERE name = 'context_pause_json'",
+    )
+    .fetch_optional(&mut *transaction)
+    .await?
+    .is_some();
+    if !has_pause_column {
+        sqlx::query(CONTEXT_PAUSE_SQL)
+            .execute(&mut *transaction)
+            .await?;
+    }
+    sqlx::query("INSERT OR IGNORE INTO _codex_fork_thread_history_migrations (version) VALUES (1)")
+        .execute(&mut *transaction)
+        .await?;
+    transaction.commit().await?;
+    Ok(())
+}
+
+async fn migration_table_exists(pool: &SqlitePool, name: &str) -> sqlx::Result<bool> {
+    Ok(sqlx::query_scalar::<_, i64>(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+    )
+    .bind(name)
+    .fetch_optional(pool)
+    .await?
+    .is_some())
 }
 
 #[cfg(test)]

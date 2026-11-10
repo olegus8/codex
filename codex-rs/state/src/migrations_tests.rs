@@ -14,6 +14,102 @@ use crate::PINNED_THREAD_SECTION_NAME;
 
 const CUSTOM_THREAD_SECTION_ID: &str = "01984de2-8f74-7c91-a3b2-5c5e937cf317";
 
+#[tokio::test]
+async fn thread_history_migrates_a_fresh_home() -> anyhow::Result<()> {
+    check_context_pause_migration(/*legacy_pause_version*/ None, /*official*/ false).await
+}
+
+#[tokio::test]
+async fn thread_history_migrates_an_official_home() -> anyhow::Result<()> {
+    check_context_pause_migration(/*legacy_pause_version*/ None, /*official*/ true).await
+}
+
+#[tokio::test]
+async fn thread_history_repairs_a_home_with_pause_before_lifecycle() -> anyhow::Result<()> {
+    check_context_pause_migration(Some(7), /*official*/ false).await
+}
+
+#[tokio::test]
+async fn thread_history_repairs_a_home_with_lifecycle_before_pause() -> anyhow::Result<()> {
+    check_context_pause_migration(Some(8), /*official*/ false).await
+}
+
+async fn check_context_pause_migration(
+    legacy_pause_version: Option<i64>,
+    official: bool,
+) -> anyhow::Result<()> {
+    let home = tempfile::tempdir()?;
+    let sqlite = crate::SqliteConfig::new_for_testing(home.path().abs());
+    let pause = r#"{"usedTokens":71,"contextWindow":100,"thresholdPercent":70}"#;
+    if let Some(pause_version) = legacy_pause_version {
+        let pool = sqlite.open_read_write_pool(&sqlite.thread_history_db_path()).await?;
+        let mut migrations = THREAD_HISTORY_MIGRATOR.migrations[..7].to_vec();
+        if pause_version == 7 {
+            migrations[6].version = 8;
+        }
+        migrations.push(Migration::new(
+            pause_version,
+            Cow::Borrowed("context pause"),
+            migrations[0].migration_type,
+            Cow::Borrowed("ALTER TABLE thread_turns ADD COLUMN context_pause_json TEXT;\n"),
+            /*no_tx*/ false,
+        ));
+        migrations.sort_by_key(|migration| migration.version);
+        Migrator::with_migrations(migrations).run(&pool).await?;
+        sqlx::query(
+            "INSERT INTO thread_turns \
+             (thread_id, turn_id, rollout_ordinal, status, context_pause_json) \
+             VALUES ('thread', 'turn', 1, 'completed', ?)",
+        )
+        .bind(pause)
+        .execute(&pool)
+        .await?;
+        pool.close().await;
+    } else if official {
+        let pool = sqlite.open_read_write_pool(&sqlite.thread_history_db_path()).await?;
+        THREAD_HISTORY_MIGRATOR.run(&pool).await?;
+        pool.close().await;
+    }
+
+    let pool = crate::open_thread_history_db(&sqlite).await?;
+    if legacy_pause_version.is_some() {
+        let saved = sqlx::query_scalar::<_, String>(
+            "SELECT context_pause_json FROM thread_turns WHERE turn_id = 'turn'",
+        )
+        .fetch_one(&pool)
+        .await?;
+        assert_eq!(saved, pause);
+    } else {
+        sqlx::query(
+            "INSERT INTO thread_turns \
+             (thread_id, turn_id, rollout_ordinal, status, context_pause_json) \
+             VALUES ('thread', 'turn', 1, 'completed', ?)",
+        )
+        .bind(pause)
+        .execute(&pool)
+        .await?;
+    }
+    pool.close().await;
+
+    let official_pool = sqlite.open_read_write_pool(&sqlite.thread_history_db_path()).await?;
+    THREAD_HISTORY_MIGRATOR.run(&official_pool).await?;
+    let applied = sqlx::query_scalar::<_, i64>("SELECT count(*) FROM _sqlx_migrations")
+        .fetch_one(&official_pool)
+        .await?;
+    assert_eq!(applied as usize, THREAD_HISTORY_MIGRATOR.migrations.len());
+    official_pool.close().await;
+
+    let pool = crate::open_thread_history_db(&sqlite).await?;
+    let saved = sqlx::query_scalar::<_, String>(
+        "SELECT context_pause_json FROM thread_turns WHERE turn_id = 'turn'",
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(saved, pause);
+    pool.close().await;
+    Ok(())
+}
+
 fn migrator_through(version: i64) -> Migrator {
     Migrator {
         migrations: Cow::Owned(
