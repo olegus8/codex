@@ -40,8 +40,7 @@ impl ContextPauseState {
                         state.waiting_for_user = !pause.resumed_by_user;
                     }
                 }
-                RolloutItem::ResponseItem(envelope)
-                    if matches!(&envelope.item, ResponseItem::Message { role, .. } if role == "user") =>
+                RolloutItem::ResponseItem(envelope) if matches!(&envelope.item, ResponseItem::Message { role, .. } if role == "user") =>
                 {
                     input_origin = UserInputOrigin::from_message(&envelope.item);
                 }

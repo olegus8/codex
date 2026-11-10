@@ -131,7 +131,10 @@ pub(crate) async fn repair_legacy_thread_history_migrations(
     pool: &SqlitePool,
     migrator: &Migrator,
 ) -> anyhow::Result<()> {
-    let Some(lifecycle) = migrator.migrations.iter().find(|migration| migration.version == 7)
+    let Some(lifecycle) = migrator
+        .migrations
+        .iter()
+        .find(|migration| migration.version == 7)
     else {
         return Ok(());
     };
@@ -157,13 +160,12 @@ pub(crate) async fn repair_legacy_thread_history_migrations(
     };
 
     let mut transaction = pool.begin_immediate().await?;
-    let removed = sqlx::query(
-        "DELETE FROM _sqlx_migrations WHERE version = ? AND checksum = ? AND success",
-    )
-    .bind(version)
-    .bind(pause.checksum.as_ref())
-    .execute(&mut *transaction)
-    .await?;
+    let removed =
+        sqlx::query("DELETE FROM _sqlx_migrations WHERE version = ? AND checksum = ? AND success")
+            .bind(version)
+            .bind(pause.checksum.as_ref())
+            .execute(&mut *transaction)
+            .await?;
     if version == 7 && removed.rows_affected() == 1 {
         sqlx::query(
             "UPDATE _sqlx_migrations SET version = 7, description = ? \

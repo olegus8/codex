@@ -6578,7 +6578,12 @@ async fn a_compaction_carries_the_pause_into_a_bounded_resume() {
         }))
         .await;
     assert_eq!(
-        session.state.lock().await.context_pause.checkpoint(session.thread_id()),
+        session
+            .state
+            .lock()
+            .await
+            .context_pause
+            .checkpoint(session.thread_id()),
         expected.context_pause,
     );
 }

@@ -43,7 +43,9 @@ async fn check_context_pause_migration(
     let sqlite = crate::SqliteConfig::new_for_testing(home.path().abs());
     let pause = r#"{"usedTokens":71,"contextWindow":100,"thresholdPercent":70}"#;
     if let Some(pause_version) = legacy_pause_version {
-        let pool = sqlite.open_read_write_pool(&sqlite.thread_history_db_path()).await?;
+        let pool = sqlite
+            .open_read_write_pool(&sqlite.thread_history_db_path())
+            .await?;
         let mut migrations = THREAD_HISTORY_MIGRATOR.migrations[..7].to_vec();
         if pause_version == 7 {
             migrations[6].version = 8;
@@ -67,7 +69,9 @@ async fn check_context_pause_migration(
         .await?;
         pool.close().await;
     } else if official {
-        let pool = sqlite.open_read_write_pool(&sqlite.thread_history_db_path()).await?;
+        let pool = sqlite
+            .open_read_write_pool(&sqlite.thread_history_db_path())
+            .await?;
         THREAD_HISTORY_MIGRATOR.run(&pool).await?;
         pool.close().await;
     }
@@ -92,7 +96,9 @@ async fn check_context_pause_migration(
     }
     pool.close().await;
 
-    let official_pool = sqlite.open_read_write_pool(&sqlite.thread_history_db_path()).await?;
+    let official_pool = sqlite
+        .open_read_write_pool(&sqlite.thread_history_db_path())
+        .await?;
     THREAD_HISTORY_MIGRATOR.run(&official_pool).await?;
     let applied = sqlx::query_scalar::<_, i64>("SELECT count(*) FROM _sqlx_migrations")
         .fetch_one(&official_pool)
