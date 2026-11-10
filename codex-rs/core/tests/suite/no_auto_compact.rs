@@ -177,7 +177,8 @@ async fn no_auto_compact_refuses_model_requested_reset() -> Result<()> {
         })
         .build_with_auto_env(&server)
         .await?;
-    test.submit_text_turn("Retain this original request").await?;
+    test.submit_text_turn("Retain this original request")
+        .await?;
 
     let requests = responses.requests();
     assert_eq!(requests.len(), 3);
