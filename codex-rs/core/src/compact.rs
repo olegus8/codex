@@ -66,6 +66,12 @@ const COMPACT_USER_MESSAGE_MAX_TOKENS: usize = 20_000;
 /// Insert into `StartThreadOptions::thread_extension_init` to disable automatic compaction.
 pub struct AutoCompactionDisabled;
 
+/// Guardian reviews retain their own compaction policy.
+pub(crate) fn automatic_compaction_configured(turn_context: &TurnContext) -> bool {
+    turn_context.config.model_auto_compact_enabled
+        || crate::guardian::is_basic_session_source(&turn_context.session_source)
+}
+
 /// Metadata for a new compaction checkpoint, kept separate from its replacement history.
 ///
 /// `Session::replace_compacted_history` assigns missing item IDs before constructing the persisted
