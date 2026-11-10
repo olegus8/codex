@@ -14,12 +14,12 @@ use core_test_support::test_codex::test_codex;
 use pretty_assertions::assert_eq;
 use test_case::test_case;
 
-#[test_case(125_000, false; "below threshold")]
-#[test_case(134_000, true; "above threshold")]
+#[test_case(118_000, false; "below threshold")]
+#[test_case(127_000, true; "above threshold")]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn context_policy_counts_past_reasoning_once(used: i64, crosses_threshold: bool) -> Result<()> {
     skip_if_no_network!(Ok(()));
-    const WINDOW: i64 = 190_000;
+    const WINDOW: i64 = 180_000;
     const REMAINING_CALL: &str = "remaining-context";
 
     let server = start_mock_server().await;
@@ -45,8 +45,8 @@ async fn context_policy_counts_past_reasoning_once(used: i64, crosses_threshold:
     .await;
     let test = test_codex()
         .with_model_info_override("gpt-5.5", |model| {
-            model.context_window = Some(WINDOW);
-            model.effective_context_window_percent = 100;
+            model.context_window = Some(200_000);
+            model.effective_context_window_percent = 90;
             model.auto_compact_token_limit = Some(WINDOW);
         })
         .with_config(|config| {
