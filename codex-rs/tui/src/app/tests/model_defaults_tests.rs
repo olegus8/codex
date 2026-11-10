@@ -7,6 +7,67 @@ use crossterm::event::KeyCode;
 use pretty_assertions::assert_eq;
 
 #[tokio::test]
+async fn fixed_session_model_rejects_queued_changes_on_the_server() -> Result<()> {
+    let (mut app, _events, _ops) = make_test_app_with_channels().await;
+    app.config.model = Some("gpt-5.5".into());
+    let mut server = Box::pin(crate::start_embedded_app_server_for_picker(&app.config)).await?;
+    let started = server.start_thread(&app.config).await?;
+    let thread_id = started.session.thread_id;
+    let model = started.session.model.clone();
+    app.enqueue_primary_thread_session(started.session, started.turns)
+        .await?;
+    app.local_settings.model_switching_enabled = false;
+    app.chat_widget.local_settings.model_switching_enabled = false;
+    let mut tui = crate::tui::test_support::make_test_tui()?;
+    let other_model = "gpt-5.6-terra".to_string();
+    assert_ne!(model, other_model);
+    for event in [
+        AppEvent::UpdateModel(other_model.clone()),
+        AppEvent::ApplyModelSelection {
+            model: other_model.clone(),
+            effort: Some(ReasoningEffortConfig::High),
+        },
+        AppEvent::SelectSessionModel {
+            model: other_model.clone(),
+            effort: Some(ReasoningEffortConfig::High),
+            service_tier: Some(SERVICE_TIER_DEFAULT_REQUEST_VALUE.to_string()),
+        },
+        AppEvent::ApplyAdvancedReasoning {
+            model: other_model.clone(),
+            effort: ReasoningEffortConfig::High,
+        },
+    ] {
+        Box::pin(app.handle_event(&mut tui, &mut server, event)).await?;
+        assert_eq!(app.chat_widget.current_model(), model);
+    }
+    let mut collaboration_mode = app.chat_widget.effective_collaboration_mode();
+    collaboration_mode.settings.model = other_model;
+    assert!(
+        !app.send_thread_settings_update(
+            &mut server,
+            codex_app_server_protocol::ThreadSettingsUpdateParams {
+                thread_id: thread_id.to_string(),
+                collaboration_mode: Some(collaboration_mode),
+                ..Default::default()
+            },
+        )
+        .await
+    );
+    app.sync_active_thread_reasoning_setting(&mut server, Some(ReasoningEffortConfig::High))
+        .await;
+    let settings = next_thread_settings_updated(&mut server, thread_id).await;
+    assert_eq!(
+        (
+            settings.thread_settings.model,
+            settings.thread_settings.effort
+        ),
+        (model, Some(ReasoningEffortConfig::High)),
+    );
+    server.shutdown().await?;
+    Ok(())
+}
+
+#[tokio::test]
 async fn session_model_selection_preserves_defaults_and_updates_active_thread() -> Result<()> {
     for mode in [ModeKind::Default, ModeKind::Plan] {
         let (mut app, mut events, _ops) = make_test_app_with_channels().await;
