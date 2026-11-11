@@ -29,9 +29,21 @@ pub(crate) async fn context_window_token_status(
     sess: &Session,
     turn_context: &TurnContext,
 ) -> ContextWindowTokenStatus {
+    let active_context_tokens = if !automatic_compaction_configured(turn_context)
+        || sess
+            .services
+            .thread_extension_data
+            .get::<AutoCompactionDisabled>()
+            .is_some()
+    {
+        // Provider usage already covers the prior reasoning sent in its request.
+        sess.get_reported_token_usage().await
+    } else {
+        sess.get_total_token_usage().await
+    };
     context_window_token_status_with_config(
         sess,
-        turn_context,
+        active_context_tokens,
         turn_context.config.as_ref(),
         turn_context.model_info().as_ref(),
     )
@@ -50,28 +62,16 @@ pub(crate) async fn context_window_token_status_for_model(
         turn_context.use_model_token_budget_defaults,
         model_info,
     );
-    context_window_token_status_with_config(sess, turn_context, &config, model_info).await
+    let active_context_tokens = sess.get_total_token_usage().await;
+    context_window_token_status_with_config(sess, active_context_tokens, &config, model_info).await
 }
 
 async fn context_window_token_status_with_config(
     sess: &Session,
-    turn_context: &TurnContext,
+    active_context_tokens: i64,
     config: &Config,
     model_info: &ModelInfo,
 ) -> ContextWindowTokenStatus {
-    let active_context_tokens = if !automatic_compaction_configured(turn_context)
-        || sess
-            .services
-            .thread_extension_data
-            .get::<AutoCompactionDisabled>()
-            .is_some()
-    {
-        // Provider usage already covers the prior reasoning sent in its request.
-        sess.get_reported_token_usage().await
-    } else {
-        sess.get_total_token_usage().await
-    };
-
     // Count either the full active context or only the tokens added after the initial prefix.
     let (auto_compact_scope_tokens, auto_compact_scope_limit, auto_compact_window_prefill_tokens) =
         match config.model_auto_compact_token_limit_scope {
