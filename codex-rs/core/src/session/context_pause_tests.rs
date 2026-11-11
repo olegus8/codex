@@ -1,4 +1,7 @@
 use super::ContextPauseState;
+use super::require_user_input;
+use crate::session::tests::attach_thread_persistence;
+use crate::session::tests::make_session_and_context_with_rx;
 use codex_history::CompactedItem;
 use codex_history::CompactionContextPause;
 use codex_history::CompactionResumeMetadata;
@@ -16,6 +19,7 @@ use codex_protocol::protocol::TurnCompleteEvent;
 use codex_protocol::protocol::TurnStartedEvent;
 use codex_protocol::protocol::UserMessageEvent;
 use pretty_assertions::assert_eq;
+use std::sync::Arc;
 
 fn compaction(pause: Option<CompactionContextPause>) -> RolloutItem {
     RolloutItem::Compacted(Box::new(CompactedItem {
@@ -172,5 +176,51 @@ fn a_fork_does_not_inherit_its_parent_pause() {
     assert_eq!(
         restored(fork, &[compaction(parent_pause), paused_turn(parent)]),
         (None, false)
+    );
+}
+
+#[tokio::test]
+async fn context_pause_write_failure_leaves_the_thread_unpaused() {
+    let (mut session, turn, events) = make_session_and_context_with_rx().await;
+    attach_thread_persistence(Arc::get_mut(&mut session).expect("unique session")).await;
+    session
+        .live_thread()
+        .expect("live thread")
+        .shutdown()
+        .await
+        .expect("close rollout writer");
+    let thread_id = session.thread_id();
+    let item = paused_turn(thread_id);
+    session.state.lock().await.context_pause =
+        ContextPauseState::restore(thread_id, std::slice::from_ref(&item));
+    let RolloutItem::EventMsg(event) = item else {
+        unreachable!();
+    };
+
+    session.send_event(&turn, event).await;
+
+    let EventMsg::TurnComplete(completed) = events.recv().await.expect("completion event").msg
+    else {
+        panic!("expected turn completion");
+    };
+    assert!(completed.context_pause.is_none());
+    assert!(
+        completed
+            .error
+            .expect("persistence error")
+            .message
+            .contains("Could not persist the context pause")
+    );
+    require_user_input(&session, /*explicit_user*/ false)
+        .await
+        .expect("idle starts are allowed again");
+    assert_eq!(
+        session
+            .state
+            .lock()
+            .await
+            .context_pause
+            .checkpoint(thread_id),
+        None
     );
 }

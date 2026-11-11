@@ -381,6 +381,7 @@ use codex_protocol::protocol::ApplyPatchApprovalRequestEvent;
 use codex_protocol::protocol::AskForApproval;
 use codex_protocol::protocol::CodexErrorInfo;
 use codex_protocol::protocol::DeprecationNoticeEvent;
+use codex_protocol::protocol::ErrorEvent;
 use codex_protocol::protocol::Event;
 use codex_protocol::protocol::EventMsg;
 use codex_protocol::protocol::ExecApprovalRequestEvent;
@@ -2545,7 +2546,7 @@ impl Session {
     }
 
     /// Persist the event to rollout and send it to clients.
-    pub(crate) async fn send_event(&self, turn_context: &TurnContext, mut msg: EventMsg) {
+    pub(crate) async fn send_event(&self, turn_context: &TurnContext, msg: EventMsg) {
         if let Some((item_id, started_at_ms)) = msg.command_approval_start() {
             // The client can see the command before execution. Keep its first start
             // for the canonical lifecycle events that will be saved in history.
@@ -2554,20 +2555,7 @@ impl Session {
                 .record_item_started(item_id.to_owned(), started_at_ms)
                 .await;
         }
-        let persists_pause =
-            matches!(&msg, EventMsg::TurnComplete(event) if event.context_pause.is_some());
-        if persists_pause
-            && let Err(error) = context_pause::persist_completion(self, &msg).await
-            && let EventMsg::TurnComplete(event) = &mut msg
-        {
-            let error = CodexErr::Fatal(format!("Could not persist the context pause: {error}"))
-                .to_error_event(/*message_prefix*/ None);
-            error!("{}", error.message);
-            event.context_pause = None;
-            event.error = Some(error.clone());
-            turn_context.terminal_error.lock().await.replace(error);
-        }
-        let legacy_source = msg.clone();
+        let mut legacy_source = msg.clone();
         if let EventMsg::Error(error) = &legacy_source
             && error
                 .codex_error_info
@@ -2608,8 +2596,22 @@ impl Session {
                 .analytics_events_client
                 .track_guardian_session_event(self.thread_id, &event);
         }
-        self.send_event_raw_with_persistence(event, !persists_pause)
-            .await;
+        if let Some(error) = self
+            .send_event_raw_with_persistence(event, /*persist*/ true)
+            .await
+        {
+            // An unsaved pause did not take effect.
+            self.state.lock().await.context_pause = Default::default();
+            turn_context
+                .terminal_error
+                .lock()
+                .await
+                .replace(error.clone());
+            if let EventMsg::TurnComplete(completed) = &mut legacy_source {
+                completed.context_pause = None;
+                completed.error = Some(error);
+            }
+        }
         self.maybe_notify_parent_of_terminal_turn(turn_context, &legacy_source)
             .await;
         self.maybe_mirror_event_text_to_realtime(&legacy_source)
@@ -2762,7 +2764,8 @@ impl Session {
     }
 
     pub(crate) async fn send_event_raw(&self, event: Event) {
-        self.send_event_raw_with_persistence(event, /*persist*/ true)
+        let _ = self
+            .send_event_raw_with_persistence(event, /*persist*/ true)
             .await;
     }
 
@@ -2776,10 +2779,15 @@ impl Session {
                 true
             }
         };
-        self.send_event_raw_with_persistence(event, persist).await;
+        let _ = self.send_event_raw_with_persistence(event, persist).await;
     }
 
-    async fn send_event_raw_with_persistence(&self, event: Event, persist: bool) {
+    /// Returns the error delivered in place of a context pause that could not be saved.
+    async fn send_event_raw_with_persistence(
+        &self,
+        mut event: Event,
+        persist: bool,
+    ) -> Option<ErrorEvent> {
         let flush_guardian_completion = persist
             && matches!(event.msg, EventMsg::TurnComplete(_))
             && self.is_private_guardian_reviewer().await;
@@ -2810,7 +2818,22 @@ impl Session {
             warn!("failed to persist realtime history: {error}");
         }
         // Persist the event into rollout storage; the store applies its persistence policy.
-        if persist {
+        let mut persistence_error = None;
+        if persist
+            && matches!(&event.msg, EventMsg::TurnComplete(done) if done.context_pause.is_some())
+        {
+            if let Err(error) = context_pause::persist_completion(self, &event.msg).await {
+                let error =
+                    CodexErr::Fatal(format!("Could not persist the context pause: {error}"))
+                        .to_error_event(/*message_prefix*/ None);
+                error!("{}", error.message);
+                if let EventMsg::TurnComplete(completed) = &mut event.msg {
+                    completed.context_pause = None;
+                    completed.error = Some(error.clone());
+                }
+                persistence_error = Some(error);
+            }
+        } else if persist {
             let rollout_items = vec![RolloutItem::EventMsg(event.msg.clone())];
             self.persist_rollout_items(&rollout_items).await;
         }
@@ -2828,6 +2851,7 @@ impl Session {
             warn!("failed to flush completed Guardian review: {err}");
         }
         self.deliver_event_raw(event).await;
+        persistence_error
     }
 
     async fn deliver_event_raw(&self, event: Event) {
