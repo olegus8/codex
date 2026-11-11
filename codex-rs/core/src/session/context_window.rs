@@ -3,6 +3,8 @@ use super::turn_context::TurnContext;
 use crate::config::Config;
 use codex_protocol::config_types::AutoCompactTokenLimitScope;
 use codex_protocol::openai_models::ModelInfo;
+use codex_protocol::protocol::TokenUsage;
+use codex_protocol::protocol::TokenUsageInfo;
 
 #[derive(Debug)]
 pub(crate) struct ContextWindowTokenStatus {
@@ -21,6 +23,28 @@ pub(crate) struct ContextWindowTokenStatus {
 
 fn tokens_remaining(limit: Option<i64>, used: i64) -> Option<i64> {
     limit.map(|limit| limit.saturating_sub(used).max(0))
+}
+
+pub(super) async fn record_exhaustion(
+    sess: &Session,
+    turn_context: &TurnContext,
+    usable_window: i64,
+) {
+    {
+        let mut state = sess.state.lock().await;
+        let mut info = state.token_info().unwrap_or_else(|| TokenUsageInfo {
+            total_token_usage: TokenUsage::default(),
+            last_token_usage: TokenUsage::default(),
+            last_usage_includes_reasoning: None,
+            model_context_window: None,
+        });
+        // The exhausted window is a context count, not additional provider spending.
+        info.last_token_usage.total_tokens = info.last_token_usage.total_tokens.max(usable_window);
+        info.last_usage_includes_reasoning = Some(true);
+        info.model_context_window = Some(usable_window);
+        state.set_token_info(Some(info));
+    }
+    sess.send_token_count_event(turn_context).await;
 }
 
 pub(crate) async fn context_window_token_status(

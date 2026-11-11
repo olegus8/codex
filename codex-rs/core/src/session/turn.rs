@@ -9,6 +9,7 @@ use crate::client::ModelClientSession;
 use crate::client_common::Prompt;
 use crate::client_common::ResponseEvent;
 use crate::compact::AutoCompactionDisabled;
+use crate::compact::automatic_compaction_configured;
 use crate::compact::run_inline_auto_compact_task;
 use crate::compact_remote_v2::BackgroundCompactionCandidate;
 use crate::compact_remote_v2::run_inline_remote_auto_compact_task as run_inline_remote_auto_compact_task_v2;
@@ -197,11 +198,13 @@ pub(crate) async fn run_turn(
             Ok(_) => Err(uploaded_audio_disabled_error()),
         };
     }
-    let auto_compaction_enabled = sess
+    let thread_auto_compaction_enabled = sess
         .services
         .thread_extension_data
         .get::<AutoCompactionDisabled>()
         .is_none();
+    let auto_compaction_enabled =
+        thread_auto_compaction_enabled && automatic_compaction_configured(&turn_context);
     let auto_summarization_enabled =
         auto_compaction_enabled && !turn_context.config.features.enabled(Feature::TokenBudget);
     if crate::guardian::is_basic_session_source(&turn_context.session_source) {
@@ -591,6 +594,26 @@ pub(crate) async fn run_turn(
                 .clone_history()
                 .instrument(trace_span!("run_turn.prepare_sampling_request_input"))
                 .await;
+            if !automatic_compaction_configured(&turn_context)
+                && let Some(usable_window) = step_context.settings.model_info.usable_context_window()
+            {
+                let used_tokens = if sampling_request_input
+                    .token_info()
+                    .is_some_and(|info| info.last_token_usage.total_tokens > 0)
+                {
+                    sampling_request_input.get_total_token_usage()
+                } else {
+                    let base_instructions = sess.get_prompt_base_instructions().await;
+                    sampling_request_input
+                        .estimate_token_count_with_base_instructions(&base_instructions)
+                        .unwrap_or_default()
+                };
+                if used_tokens >= usable_window {
+                    super::context_window::record_exhaustion(&sess, &turn_context, usable_window)
+                        .await;
+                    return Err(CodexErr::ContextWindowExceeded);
+                }
+            }
 
             run_sampling_request(
                 Arc::clone(&sess),
@@ -694,8 +717,9 @@ pub(crate) async fn run_turn(
                     && (sess.take_new_context_window_request().await
                         || token_limit_reached
                         || candidate.is_some());
-                if auto_compaction_enabled {
-                    let allow_auto_compact_fallback = !should_roll_over && !token_limit_reached;
+                if thread_auto_compaction_enabled {
+                    let allow_auto_compact_fallback =
+                        auto_compaction_enabled && !should_roll_over && !token_limit_reached;
                     super::token_budget::maybe_record(
                         sess.as_ref(),
                         turn_context.as_ref(),
@@ -1901,7 +1925,14 @@ async fn run_sampling_request(
             }
             Err(err) => match err.details() {
                 CodexErrorDetails::ContextWindowExceeded => {
-                    sess.set_total_tokens_full(&turn_context).await;
+                    if automatic_compaction_configured(&turn_context) {
+                        sess.set_total_tokens_full(&turn_context).await;
+                    } else if let Some(usable_window) =
+                        step_context.settings.model_info.usable_context_window()
+                    {
+                        super::context_window::record_exhaustion(&sess, &turn_context, usable_window)
+                            .await;
+                    }
                     return Err(err);
                 }
                 CodexErrorDetails::UsageLimitReached(e) => {
