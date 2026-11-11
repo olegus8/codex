@@ -110,8 +110,6 @@ use codex_protocol::openai_models::ModelInfo;
 use codex_protocol::protocol::AgentMessageContentDeltaEvent;
 use codex_protocol::protocol::AgentReasoningSectionBreakEvent;
 use codex_protocol::protocol::CodexErrorInfo;
-use codex_protocol::protocol::ContextPause;
-use codex_protocol::protocol::ContextWindowUsage;
 use codex_protocol::protocol::ErrorEvent;
 use codex_protocol::protocol::EventMsg;
 use codex_protocol::protocol::HookEventName;
@@ -1554,16 +1552,6 @@ async fn finish_context_paused_turn(
     notify_messages: Vec<String>,
     last_agent_message: Option<String>,
 ) {
-    if let Some(pause) = step_context.turn.extension_data.get::<ContextPause>() {
-        sess.send_context_token_count(
-            &step_context.turn,
-            Some(ContextWindowUsage {
-                used_tokens: pause.used_tokens,
-                context_window: pause.context_window,
-            }),
-        )
-        .await;
-    }
     let outcome = run_turn_stop_hooks(
         sess,
         step_context,

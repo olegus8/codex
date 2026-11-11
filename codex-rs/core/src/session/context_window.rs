@@ -5,7 +5,6 @@ use crate::compact::automatic_compaction_configured;
 use crate::config::Config;
 use codex_protocol::config_types::AutoCompactTokenLimitScope;
 use codex_protocol::openai_models::ModelInfo;
-use codex_protocol::protocol::ContextWindowUsage;
 use codex_protocol::protocol::TokenUsage;
 use codex_protocol::protocol::TokenUsageInfo;
 
@@ -48,14 +47,8 @@ pub(super) async fn record_exhaustion(
         info.model_context_window = Some(usable_window);
         state.set_token_info(Some(info));
     }
-    sess.send_context_token_count(
-        turn_context,
-        Some(ContextWindowUsage {
-            used_tokens: usable_window,
-            context_window: usable_window,
-        }),
-    )
-    .await;
+    sess.send_context_token_count(turn_context, /*exhausted*/ true)
+        .await;
 }
 
 pub(crate) async fn context_window_token_status(
