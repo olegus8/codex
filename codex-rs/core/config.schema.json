@@ -8372,6 +8372,10 @@
       "description": "Optional override of model selection.",
       "type": "string"
     },
+    "model_auto_compact_enabled": {
+      "description": "Whether automatic context compaction and resets are enabled. Defaults to true.",
+      "type": "boolean"
+    },
     "model_auto_compact_token_limit": {
       "description": "Token usage threshold triggering auto-compaction of conversation history.",
       "format": "int64",

@@ -38,7 +38,7 @@ fn builder() -> TestCodexBuilder {
         .with_pre_build_hook(|home| {
             std::fs::write(
                 home.join("config.toml"),
-                "model_context_pause_percent = 70\n",
+                "model_context_pause_percent = 70\nmodel_auto_compact_enabled = false\n",
             )
             .expect("write context policy");
         })
@@ -539,8 +539,10 @@ async fn context_pause_rejects_invalid_threshold(percent: u8) -> Result<()> {
     Ok(())
 }
 
+#[test_case(false; "threshold absent")]
+#[test_case(true; "automatic compaction enabled")]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn context_pause_is_opt_in() -> Result<()> {
+async fn context_pause_is_opt_in(auto_compact: bool) -> Result<()> {
     skip_if_no_network!(Ok(()));
     let server = start_mock_server().await;
     mount_sse_once(
@@ -557,7 +559,12 @@ async fn context_pause_is_opt_in() -> Result<()> {
     )
     .await;
     let test = builder()
-        .with_config(|config| config.model_context_pause_percent = None)
+        .with_config(move |config| {
+            config.model_auto_compact_enabled = auto_compact;
+            if !auto_compact {
+                config.model_context_pause_percent = None;
+            }
+        })
         .build_with_auto_env(&server)
         .await?;
     assert!(turn(&test, "Do the work").await?["context_pause"].is_null());
@@ -567,5 +574,23 @@ async fn context_pause_is_opt_in() -> Result<()> {
             .as_deref(),
         Some("Plan updated")
     );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn context_pause_skips_a_full_usable_window() -> Result<()> {
+    skip_if_no_network!(Ok(()));
+    let server = start_mock_server().await;
+    let response = mount_sse_once(
+        &server,
+        sse(vec![
+            ev_assistant_message("m1", "Done"),
+            ev_completed_with_tokens("r1", /*total_tokens*/ 190_000),
+        ]),
+    )
+    .await;
+    let test = builder().build_with_auto_env(&server).await?;
+    assert!(turn(&test, "Fill the window").await?["context_pause"].is_null());
+    assert_eq!(response.requests().len(), 1);
     Ok(())
 }

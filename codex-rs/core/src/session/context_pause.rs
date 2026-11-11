@@ -1,6 +1,7 @@
 use super::context_window::ContextWindowTokenStatus;
 use super::session::Session;
 use super::turn_context::TurnContext;
+use crate::compact::automatic_compaction_configured;
 use codex_history::CompactionContextPause;
 use codex_history::RolloutItem;
 use codex_history::UserInputOrigin;
@@ -114,6 +115,9 @@ pub(crate) async fn maybe_pause(
     turn: &TurnContext,
     status: &ContextWindowTokenStatus,
 ) -> bool {
+    if automatic_compaction_configured(turn) || status.full_context_window_limit_reached {
+        return false;
+    }
     let (Some(threshold_percent), Some(context_window)) = (
         turn.config.model_context_pause_percent,
         status.full_context_window_limit,
