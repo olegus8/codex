@@ -5561,32 +5561,42 @@ impl Session {
     }
 
     pub(crate) async fn send_token_count_event(&self, turn_context: &TurnContext) {
-        self.send_context_token_count(turn_context, /*exhausted*/ false)
+        self.send_context_token_count(turn_context, /*measured_usage*/ None)
             .await;
     }
 
-    async fn send_context_token_count(&self, turn_context: &TurnContext, exhausted: bool) {
+    pub(super) async fn send_context_token_count(
+        &self,
+        turn_context: &TurnContext,
+        measured_usage: Option<ContextWindowUsage>,
+    ) {
+        let automatic_compaction = context_window::automatic_compaction_enabled(self, turn_context);
         let (info, rate_limits) = {
-            let state = self.state.lock().await;
+            let mut state = self.state.lock().await;
             let (mut info, rate_limits) = state.token_info_and_rate_limits();
+            if let Some(usage) = &measured_usage {
+                info.get_or_insert_with(|| TokenUsageInfo {
+                    context_window_usage: None,
+                    total_token_usage: TokenUsage::default(),
+                    last_usage_includes_reasoning: None,
+                    last_token_usage: TokenUsage::default(),
+                    model_context_window: Some(usage.context_window),
+                });
+            }
             if let Some(info) = &mut info {
-                info.context_window_usage =
-                    (!crate::compact::automatic_compaction_configured(turn_context)
-                        || self
-                            .services
-                            .thread_extension_data
-                            .get::<crate::compact::AutoCompactionDisabled>()
-                            .is_some())
-                    .then(|| turn_context.model_context_window())
-                    .flatten()
-                    .map(|context_window| ContextWindowUsage {
-                        used_tokens: if exhausted {
-                            context_window
-                        } else {
-                            state.get_reported_token_usage()
-                        },
-                        context_window,
-                    });
+                info.context_window_usage = if automatic_compaction {
+                    None
+                } else {
+                    measured_usage.or_else(|| {
+                        turn_context.model_context_window().map(|context_window| {
+                            ContextWindowUsage {
+                                used_tokens: state.get_reported_token_usage(),
+                                context_window,
+                            }
+                        })
+                    })
+                };
+                state.set_token_info(Some(info.clone()));
             }
             (info, rate_limits)
         };
@@ -5595,12 +5605,19 @@ impl Session {
     }
 
     pub(crate) async fn set_total_tokens_full(&self, turn_context: &TurnContext) {
-        if let Some(context_window) = turn_context.model_context_window() {
+        let context_window = turn_context.model_context_window();
+        if let Some(context_window) = context_window {
             let mut state = self.state.lock().await;
             state.set_token_usage_full(context_window);
         }
-        self.send_context_token_count(turn_context, /*exhausted*/ true)
-            .await;
+        self.send_context_token_count(
+            turn_context,
+            context_window.map(|context_window| ContextWindowUsage {
+                used_tokens: context_window,
+                context_window,
+            }),
+        )
+        .await;
     }
 
     pub(crate) async fn record_response_item_and_emit_turn_item(

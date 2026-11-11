@@ -131,6 +131,7 @@ pub(crate) async fn maybe_pause(
     turn: &TurnContext,
     status: &ContextWindowTokenStatus,
 ) -> bool {
+    super::context_window::publish_usage(session, turn, status).await;
     let Some((threshold_percent, context_window)) = reached_threshold(turn, status) else {
         return false;
     };

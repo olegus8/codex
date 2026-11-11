@@ -5,6 +5,7 @@ use crate::compact::automatic_compaction_configured;
 use crate::config::Config;
 use codex_protocol::config_types::AutoCompactTokenLimitScope;
 use codex_protocol::openai_models::ModelInfo;
+use codex_protocol::protocol::ContextWindowUsage;
 use codex_protocol::protocol::TokenUsage;
 use codex_protocol::protocol::TokenUsageInfo;
 
@@ -47,21 +48,51 @@ pub(super) async fn record_exhaustion(
         info.model_context_window = Some(usable_window);
         state.set_token_info(Some(info));
     }
-    sess.send_context_token_count(turn_context, /*exhausted*/ true)
-        .await;
+    sess.send_context_token_count(
+        turn_context,
+        Some(ContextWindowUsage {
+            used_tokens: usable_window,
+            context_window: usable_window,
+        }),
+    )
+    .await;
+}
+
+pub(super) fn automatic_compaction_enabled(sess: &Session, turn_context: &TurnContext) -> bool {
+    automatic_compaction_configured(turn_context)
+        && sess
+            .services
+            .thread_extension_data
+            .get::<AutoCompactionDisabled>()
+            .is_none()
+}
+
+pub(super) async fn publish_usage(
+    sess: &Session,
+    turn_context: &TurnContext,
+    status: &ContextWindowTokenStatus,
+) {
+    if automatic_compaction_enabled(sess, turn_context) {
+        return;
+    }
+    let Some(context_window) = status.full_context_window_limit else {
+        return;
+    };
+    sess.send_context_token_count(
+        turn_context,
+        Some(ContextWindowUsage {
+            used_tokens: status.active_context_tokens,
+            context_window,
+        }),
+    )
+    .await;
 }
 
 pub(crate) async fn context_window_token_status(
     sess: &Session,
     turn_context: &TurnContext,
 ) -> ContextWindowTokenStatus {
-    let active_context_tokens = if !automatic_compaction_configured(turn_context)
-        || sess
-            .services
-            .thread_extension_data
-            .get::<AutoCompactionDisabled>()
-            .is_some()
-    {
+    let active_context_tokens = if !automatic_compaction_enabled(sess, turn_context) {
         // Provider usage already covers the prior reasoning sent in its request.
         sess.get_reported_token_usage().await
     } else {
