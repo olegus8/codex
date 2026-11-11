@@ -8,6 +8,44 @@ use codex_terminal_detection::Multiplexer;
 use pretty_assertions::assert_eq;
 
 #[tokio::test]
+async fn fixed_session_model_loads_policy_and_keeps_it_on_reload() -> anyhow::Result<()> {
+    let home = tempfile::tempdir()?;
+    let mut settings = Vec::new();
+    for (contents, expected) in [
+        ("model_switching_enabled = false\n", false),
+        ("model_switching_enabled = true\n", true),
+        ("", true),
+    ] {
+        std::fs::write(home.path().join("config.toml"), contents)?;
+        let config = ConfigBuilder::default()
+            .codex_home(home.path().to_path_buf())
+            .strict_config(true)
+            .loader_overrides(LoaderOverrides {
+                ignore_project_config: true,
+                ..LoaderOverrides::without_managed_config_for_tests()
+            })
+            .build()
+            .await?;
+        let local = LocalSettings::from(&config);
+        assert_eq!(local.model_switching_enabled, expected);
+        settings.push((local, config));
+    }
+    assert!(
+        !settings[0]
+            .0
+            .reloaded(&settings[1].1)
+            .model_switching_enabled
+    );
+    assert!(
+        !settings[1]
+            .0
+            .reloaded(&settings[0].1)
+            .model_switching_enabled
+    );
+    Ok(())
+}
+
+#[tokio::test]
 async fn launch_screen_mode_survives_configuration_reload() -> anyhow::Result<()> {
     use crate::transcript_mode::TranscriptMode;
     use codex_config::types::AltScreenMode;

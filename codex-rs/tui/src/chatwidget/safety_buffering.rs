@@ -77,7 +77,8 @@ impl ChatWidget {
     }
 
     pub(crate) fn can_retry_safety_buffered_turn(&self, turn_id: &str) -> bool {
-        self.turn_lifecycle.agent_turn_running
+        self.local_settings.model_switching_enabled
+            && self.turn_lifecycle.agent_turn_running
             && self
                 .safety_buffering
                 .active
@@ -139,17 +140,18 @@ impl ChatWidget {
             return;
         }
 
-        let retry_turn = if self.side_conversation_active() {
-            None
-        } else {
-            self.safety_buffering
-                .submitted_turn
-                .as_ref()
-                .filter(|(submitted_turn_id, _)| {
-                    replay_kind.is_none() && submitted_turn_id == &turn_id
-                })
-                .map(|(_, turn)| turn.clone())
-        };
+        let retry_turn =
+            if !self.local_settings.model_switching_enabled || self.side_conversation_active() {
+                None
+            } else {
+                self.safety_buffering
+                    .submitted_turn
+                    .as_ref()
+                    .filter(|(submitted_turn_id, _)| {
+                        replay_kind.is_none() && submitted_turn_id == &turn_id
+                    })
+                    .map(|(_, turn)| turn.clone())
+            };
         let thread_id = self.thread_id;
         let retry_prompt = self.safety_buffering_prompt.clone();
         let can_offer_retry = faster_model.is_some()
@@ -187,6 +189,9 @@ impl ChatWidget {
         }
         self.bottom_pane
             .dismiss_view_by_id(SAFETY_BUFFERING_PROMPT_VIEW_ID);
+        if !self.local_settings.model_switching_enabled {
+            return;
+        }
 
         let mut header = vec![Line::from(SAFETY_BUFFERING_HEADER).bold()];
         if can_offer_retry {

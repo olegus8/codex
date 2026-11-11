@@ -362,6 +362,58 @@ async fn safety_buffering_offers_one_retry_with_app_wording() {
 }
 
 #[tokio::test]
+async fn fixed_session_model_keeps_buffered_turn_running() {
+    let (mut chat, _rx, mut op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+    chat.local_settings.model_switching_enabled = false;
+    let model = chat.current_model().to_string();
+    let (thread_id, turn_id, _) = start_safety_buffering_test_turn(&mut chat, &mut op_rx);
+
+    chat.handle_server_notification(
+        ServerNotification::ModelSafetyBufferingUpdated(safety_buffering_notification(
+            thread_id,
+            turn_id,
+            Some("faster-model"),
+        )),
+        /*replay_kind*/ None,
+    );
+
+    assert!(chat.turn_lifecycle.agent_turn_running);
+    assert!(chat.bottom_pane.no_modal_or_popup_active());
+    assert!(!chat.can_retry_safety_buffered_turn(turn_id));
+    assert_eq!(chat.current_model(), model);
+    assert!(op_rx.try_recv().is_err());
+}
+
+#[tokio::test]
+async fn fixed_session_model_survives_plan_mode_changes() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+    chat.local_settings.model_switching_enabled = false;
+    let model = chat.current_model().to_string();
+
+    chat.set_model("different-model");
+    assert_eq!(chat.current_model(), model);
+
+    let mut mask = chat.active_collaboration_mask.clone().unwrap();
+    mask.mode = Some(ModeKind::Plan);
+    mask.model = Some("different-plan-model".to_string());
+    chat.set_collaboration_mask(mask);
+    assert_eq!(
+        (chat.current_model(), chat.active_mode_kind()),
+        (model.as_str(), ModeKind::Plan),
+    );
+}
+
+#[tokio::test]
+async fn fixed_session_model_keeps_model_picker_closed() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+    chat.local_settings.model_switching_enabled = false;
+    chat.open_model_popup();
+    assert!(chat.bottom_pane.no_modal_or_popup_active());
+    chat.open_all_models_popup();
+    assert!(chat.bottom_pane.no_modal_or_popup_active());
+}
+
+#[tokio::test]
 async fn safety_buffering_retry_confirmation_can_keep_waiting() {
     for key in [KeyCode::Enter, KeyCode::Esc] {
         let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual(/*model_override*/ None).await;

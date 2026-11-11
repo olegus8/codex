@@ -158,6 +158,13 @@ impl ChatWidget {
             effort,
             service_tier,
         } = command;
+        if !self.local_settings.model_switching_enabled && model != self.current_model() {
+            self.add_info_message(
+                "This session keeps its selected model.".into(),
+                /*hint*/ None,
+            );
+            return;
+        }
         let warning = self.ultra_reasoning_concurrency_warning(&effort);
         let thread_id = self.sparkle_thread_for_picker_action(&model);
         self.set_queue_autosend_suppressed(/*suppressed*/ true);

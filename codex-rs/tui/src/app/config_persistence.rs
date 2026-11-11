@@ -487,6 +487,8 @@ impl App {
         self.refresh_server_version_overview_notice(CODEX_CLI_VERSION);
         // Copy preferences read directly by the live widget. Other preferences have runtime
         // caches and are adopted when the widget is replaced.
+        self.chat_widget.local_settings.model_switching_enabled =
+            self.local_settings.model_switching_enabled;
         self.chat_widget
             .local_settings
             .tui

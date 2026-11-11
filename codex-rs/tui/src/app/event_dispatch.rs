@@ -169,6 +169,19 @@ impl App {
             }
             event => (event, None),
         };
+        if !self.local_settings.model_switching_enabled {
+            let requested_model = match &event {
+                AppEvent::UpdateModel(model)
+                | AppEvent::ApplyModelSelection { model, .. }
+                | AppEvent::ApplyAdvancedReasoning { model, .. }
+                | AppEvent::PersistModelSelection { model, .. }
+                | AppEvent::SelectSessionModel { model, .. } => Some(model.as_str()),
+                _ => None,
+            };
+            if requested_model.is_some_and(|model| model != self.chat_widget.current_model()) {
+                return Ok(AppRunControl::Continue);
+            }
+        }
         match event {
             AppEvent::OpenDaemonMenu => self.open_daemon_menu(),
             AppEvent::ConfirmDaemonRestart => self.confirm_daemon_restart(),

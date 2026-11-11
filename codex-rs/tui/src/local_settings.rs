@@ -23,6 +23,7 @@ use codex_utils_absolute_path::AbsolutePathBuf;
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct LocalSettings {
+    pub(crate) model_switching_enabled: bool,
     pub(crate) audio: Result<codex_config::config_toml::RealtimeAudioToml, String>,
     pub(crate) tui: Tui,
     pub(crate) transcript_mode: TranscriptMode,
@@ -50,6 +51,12 @@ impl LocalSettings {
         screen_reader_default: crate::motion::MotionMode,
     ) -> Self {
         let mut settings = Self {
+            model_switching_enabled: config
+                .config_layer_stack
+                .effective_config()
+                .get("model_switching_enabled")
+                .and_then(toml::Value::as_bool)
+                .unwrap_or(true),
             audio: Ok(Default::default()),
             transcript_mode: TranscriptMode::resolve(
                 config.tui_fullscreen_transcript,
@@ -128,6 +135,7 @@ impl LocalSettings {
         tui.session_picker_view = Some(tui.session_picker_view.unwrap_or_default());
         tui.screen_reader_detection_done = None;
         let mut settings = Self {
+            model_switching_enabled: config.model_switching_enabled.unwrap_or(true),
             audio: Ok(Default::default()),
             transcript_mode: TranscriptMode::resolve(
                 tui.fullscreen_transcript,
@@ -206,6 +214,7 @@ impl LocalSettings {
     /// Refresh editable preferences without changing this launch's terminal ownership.
     pub(crate) fn reloaded(&self, config: &Config) -> Self {
         let mut settings = Self::from(config);
+        settings.model_switching_enabled &= self.model_switching_enabled;
         settings.transcript_mode = self.transcript_mode;
         settings.tui.alternate_screen = self.tui.alternate_screen;
         // Generic reloads do not update these values in the live UI. The config panel updates

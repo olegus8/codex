@@ -224,6 +224,23 @@ impl App {
             return false;
         }
         let thread_id = ThreadId::from_string(&params.thread_id).ok();
+        if !self.local_settings.model_switching_enabled
+            && thread_id.is_some()
+            && thread_id == self.chat_widget.thread_id()
+        {
+            let model = self.chat_widget.current_model();
+            if params
+                .model
+                .as_deref()
+                .is_some_and(|requested| requested != model)
+                || params
+                    .collaboration_mode
+                    .as_ref()
+                    .is_some_and(|mode| mode.model() != model)
+            {
+                return false;
+            }
+        }
         let changes_permissions = params.cwd.is_some()
             || params.approval_policy.is_some()
             || params.approvals_reviewer.is_some()
