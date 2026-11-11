@@ -57,8 +57,12 @@ async fn fixed_session_model_rejects_queued_changes_scenario() -> Result<()> {
         )
         .await
     );
-    app.sync_active_thread_reasoning_setting(&mut server, Some(ReasoningEffortConfig::High))
-        .await;
+    boxed_future!(app.handle_event(
+        &mut tui,
+        &mut server,
+        AppEvent::UpdateReasoningEffort(Some(ReasoningEffortConfig::High)),
+    ))
+    .await?;
     let settings = next_thread_settings_updated(&mut server, thread_id).await;
     assert_eq!(
         (
