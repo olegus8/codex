@@ -67,7 +67,8 @@ def terminal(case):
     ]
     stage = 0
     turn_start = 0
-    idle = b"\x1b]7501;state=idle:app=codex\x1b\\"
+    working = b"\x1b]7501;state=working:app=codex\x1b\\"
+    completed = re.compile(rb"\x1b\]7501;state=(done|idle|error):app=codex\x1b\\")
     deadline = time.monotonic() + 90
     next_quit = None
     try:
@@ -96,16 +97,17 @@ def terminal(case):
             visible = re.sub(rb"\x1b\[[0-?]*[ -/]*[@-~]", b"", output)
             if stage < len(stages):
                 marker, prompt, count = stages[stage]
-                marker_start = visible.find(marker, turn_start)
-                if marker_start < 0:
+                working_start = visible.find(working, turn_start)
+                if working_start < 0:
                     continue
-                idle_start = visible.find(idle, marker_start + len(marker))
-                if idle_start < 0:
+                marker_start = visible.find(marker, working_start)
+                completion = completed.search(visible, working_start)
+                if marker_start < 0 or completion is None:
                     continue
                 assert len(fixture.requests) == count, (stage, count)
                 process.stdin.write(prompt)
                 process.stdin.flush()
-                turn_start = idle_start + len(idle)
+                turn_start = max(marker_start + len(marker), completion.end())
                 stage += 1
                 progress(
                     scenario=case.directory.name,
