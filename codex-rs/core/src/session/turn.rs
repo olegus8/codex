@@ -3135,7 +3135,8 @@ async fn try_run_sampling_request(
                 if *draining_for_mailbox
                     && matches!(
                         err.details(),
-                        CodexErrorDetails::Stream(_) | CodexErrorDetails::ServerErrorBeforeOutput(_)
+                        CodexErrorDetails::Stream(_)
+                            | CodexErrorDetails::ServerErrorBeforeOutput(_)
                     )
                 {
                     // Mail already requires a follow-up, even if the producer exited before

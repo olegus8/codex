@@ -136,6 +136,9 @@ async fn server_error_after_output_does_not_count_toward_omission() -> Result<()
     test.submit_text_turn("first").await?;
     test.submit_text_turn("second").await?;
 
-    assert_eq!(reasoning_ids(&mock.requests()[3]), ["rs_past", "rs_partial"]);
+    assert_eq!(
+        reasoning_ids(&mock.requests()[3]),
+        ["rs_past", "rs_partial"]
+    );
     Ok(())
 }
