@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use anyhow::Result;
 use app_test_support::MockResponsesConfig;
 use app_test_support::TestAppServer;
@@ -5,6 +7,8 @@ use codex_app_server_protocol::CodexErrorInfo;
 use codex_app_server_protocol::ThreadHistoryMode;
 use codex_app_server_protocol::ThreadReadParams;
 use codex_app_server_protocol::ThreadReadResponse;
+use codex_app_server_protocol::ThreadResumeParams;
+use codex_app_server_protocol::ThreadResumeResponse;
 use codex_app_server_protocol::ThreadStartParams;
 use codex_app_server_protocol::ThreadStartResponse;
 use codex_app_server_protocol::ThreadTimelineEntry;
@@ -20,6 +24,7 @@ use core_test_support::responses;
 use core_test_support::skip_if_no_network;
 use pretty_assertions::assert_eq;
 use test_case::test_case;
+use tokio::time::timeout;
 
 #[test_case(Some(120_000), false, ThreadHistoryMode::Legacy; "below threshold")]
 #[test_case(Some(134_000), true, ThreadHistoryMode::Legacy; "pause and handoff")]
@@ -181,5 +186,82 @@ async fn context_policy_public_outcomes(
         Some("Plan updated"),
     );
     assert!(request.inputs_of_type("compaction").is_empty());
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn context_policy_public_outcomes_pause_before_sampling() -> Result<()> {
+    skip_if_no_network!(Ok(()));
+    let server = responses::start_mock_server().await;
+    let home = tempfile::tempdir()?;
+    MockResponsesConfig::new(&server.uri())
+        .with_root_config(concat!(
+            "model_auto_compact_enabled = false\n",
+            "model_context_pause_percent = 70\n",
+            "model_context_window = 200000\n",
+        ))
+        .with_provider_config("supports_websockets = false")
+        .write(home.path())?;
+    let mut app = TestAppServer::builder()
+        .with_codex_home(home.path())
+        .build_initialized()
+        .await?;
+    let start = app
+        .send_thread_start_request_with_auto_env(ThreadStartParams {
+            model: Some("mock-model".into()),
+            ..Default::default()
+        })
+        .await?;
+    let ThreadStartResponse { thread, .. } = app.read_response(start).await?;
+    let completed = app
+        .start_turn_and_wait_for_completion(TurnStartParams {
+            thread_id: thread.id.clone(),
+            input: vec![UserInput::Text {
+                text: " context".repeat(80_000),
+                text_elements: Vec::new(),
+            }],
+            ..Default::default()
+        })
+        .await?;
+    assert_eq!(completed.turn.status, TurnStatus::Completed);
+    let pause = completed.turn.context_pause.expect("pause before sampling");
+    assert!(
+        server
+            .received_requests()
+            .await
+            .expect("requests")
+            .is_empty()
+    );
+
+    let live: ThreadTokenUsageUpdatedNotification = timeout(
+        Duration::from_secs(10),
+        app.read_notification("thread/tokenUsage/updated"),
+    )
+    .await??;
+    let window = live
+        .token_usage
+        .context_window_usage
+        .as_ref()
+        .expect("usable window usage");
+    assert_eq!(live.thread_id, thread.id);
+    assert_eq!(live.turn_id, completed.turn.id);
+    assert_eq!(window.used_tokens, pause.used_tokens);
+    assert_eq!(window.context_window, pause.context_window);
+    assert_eq!(live.token_usage.total.total_tokens, 0);
+
+    app.clear_message_buffer();
+    let resume = app
+        .send_thread_resume_request(ThreadResumeParams {
+            thread_id: thread.id,
+            ..Default::default()
+        })
+        .await?;
+    let _: ThreadResumeResponse = app.read_response(resume).await?;
+    let replayed: ThreadTokenUsageUpdatedNotification = timeout(
+        Duration::from_secs(10),
+        app.read_notification("thread/tokenUsage/updated"),
+    )
+    .await??;
+    assert_eq!(replayed, live);
     Ok(())
 }

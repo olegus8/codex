@@ -5,6 +5,7 @@ use crate::compact::automatic_compaction_configured;
 use crate::config::Config;
 use codex_protocol::config_types::AutoCompactTokenLimitScope;
 use codex_protocol::openai_models::ModelInfo;
+use codex_protocol::protocol::ContextWindowUsage;
 
 #[derive(Debug)]
 pub(crate) struct ContextWindowTokenStatus {
@@ -23,6 +24,36 @@ pub(crate) struct ContextWindowTokenStatus {
 
 fn tokens_remaining(limit: Option<i64>, used: i64) -> Option<i64> {
     limit.map(|limit| limit.saturating_sub(used).max(0))
+}
+
+pub(super) fn automatic_compaction_enabled(sess: &Session, turn_context: &TurnContext) -> bool {
+    automatic_compaction_configured(turn_context)
+        && sess
+            .services
+            .thread_extension_data
+            .get::<AutoCompactionDisabled>()
+            .is_none()
+}
+
+pub(super) async fn publish_usage(
+    sess: &Session,
+    turn_context: &TurnContext,
+    status: &ContextWindowTokenStatus,
+) {
+    if automatic_compaction_enabled(sess, turn_context) {
+        return;
+    }
+    let Some(context_window) = status.full_context_window_limit else {
+        return;
+    };
+    sess.send_context_token_count(
+        turn_context,
+        Some(ContextWindowUsage {
+            used_tokens: status.active_context_tokens,
+            context_window,
+        }),
+    )
+    .await;
 }
 
 pub(crate) async fn context_window_token_status(
@@ -59,13 +90,7 @@ async fn context_window_token_status_with_config(
     config: &Config,
     model_info: &ModelInfo,
 ) -> ContextWindowTokenStatus {
-    let active_context_tokens = if !automatic_compaction_configured(turn_context)
-        || sess
-            .services
-            .thread_extension_data
-            .get::<AutoCompactionDisabled>()
-            .is_some()
-    {
+    let active_context_tokens = if !automatic_compaction_enabled(sess, turn_context) {
         // Provider usage already covers the prior reasoning sent in its request.
         sess.get_reported_token_usage().await
     } else {

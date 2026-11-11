@@ -114,6 +114,7 @@ pub(crate) async fn maybe_pause(
     turn: &TurnContext,
     status: &ContextWindowTokenStatus,
 ) -> bool {
+    super::context_window::publish_usage(session, turn, status).await;
     let (Some(threshold_percent), Some(context_window)) = (
         turn.config.model_context_pause_percent,
         status.full_context_window_limit,
