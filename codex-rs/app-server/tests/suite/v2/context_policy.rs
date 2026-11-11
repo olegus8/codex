@@ -83,9 +83,14 @@ async fn context_policy_public_outcomes(
         }],
         ..Default::default()
     };
-    let completed = app.start_turn_and_wait_for_completion(input("Save my work")).await?;
+    let completed = app
+        .start_turn_and_wait_for_completion(input("Save my work"))
+        .await?;
     assert_eq!(first.requests().len(), 1);
-    assert_eq!(follow_up.requests().len(), usize::from(used.is_some() && !paused));
+    assert_eq!(
+        follow_up.requests().len(),
+        usize::from(used.is_some() && !paused)
+    );
     assert_eq!(completed.turn.context_pause.is_some(), paused);
 
     let expected_usage = completed
@@ -106,7 +111,10 @@ async fn context_policy_public_outcomes(
         .await?;
     let usage: ThreadTokenUsageUpdatedNotification =
         serde_json::from_value(notification.params.expect("token usage"))?;
-    let usage = usage.token_usage.context_window_usage.expect("usable window usage");
+    let usage = usage
+        .token_usage
+        .context_window_usage
+        .expect("usable window usage");
     assert_eq!(usage.context_window, 190_000);
 
     if used.is_none() {

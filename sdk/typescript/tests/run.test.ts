@@ -4,6 +4,8 @@ import path from "node:path";
 
 import { codexExecSpy } from "./codexExecSpy";
 import { describe, expect, it } from "@jest/globals";
+import { CodexExec } from "../src/exec";
+import { Thread } from "../src/thread";
 
 import {
   assistantMessage,
@@ -14,9 +16,28 @@ import {
   startResponsesTestProxy,
   SseResponseBody,
 } from "./responsesProxy";
-import { createMockClient, createTestClient } from "./testCodex";
+import { codexExecPath, createMockClient, createTestClient } from "./testCodex";
 
 describe("Codex", () => {
+  it("returns a context pause and runtime usage from the completed turn", async () => {
+    const exec = new CodexExec(codexExecPath);
+    const usage = {
+      input_tokens: 134_000,
+      cached_input_tokens: 0,
+      cache_write_input_tokens: 0,
+      output_tokens: 1,
+      reasoning_output_tokens: 0,
+      context_window_usage: { used_tokens: 134_001, context_window: 190_000 },
+    };
+    const contextPause = { ...usage.context_window_usage, threshold_percent: 70 };
+    jest.spyOn(exec, "run").mockImplementation(async function* () {
+      yield JSON.stringify({ type: "turn.completed", usage, context_pause: contextPause });
+    });
+    const result = await new Thread(exec, {}, {}).run("Save my work");
+    expect(result.usage).toEqual(usage);
+    expect(result.contextPause).toEqual(contextPause);
+  });
+
   it("returns thread events", async () => {
     const { url, close } = await startResponsesTestProxy({
       statusCode: 200,

@@ -49,7 +49,10 @@ async fn context_policy_json_outcomes_are_distinct() -> Result<()> {
     assert_eq!(completed["context_pause"]["threshold_percent"], 70);
     let usage = &completed["usage"]["context_window_usage"];
     assert_eq!(usage["context_window"], 190_000);
-    assert_eq!(usage["used_tokens"], completed["context_pause"]["used_tokens"]);
+    assert_eq!(
+        usage["used_tokens"],
+        completed["context_pause"]["used_tokens"]
+    );
     assert!(usage["used_tokens"].as_i64().expect("context usage") >= 134_000);
 
     let exhausted = run_exec(/*json_output*/ true, /*exhausted*/ true).await?;
@@ -72,13 +75,19 @@ async fn context_policy_human_output_reports_pause_and_exhaustion() -> Result<()
     skip_if_no_network!(Ok(()));
     let paused = run_exec(/*json_output*/ false, /*exhausted*/ false).await?;
     let stderr = String::from_utf8(paused.stderr)?;
-    assert!(stderr.contains("Reached the 70% context pause threshold"), "{stderr}");
+    assert!(
+        stderr.contains("Reached the 70% context pause threshold"),
+        "{stderr}"
+    );
     assert!(stderr.contains("context window:"), "{stderr}");
     assert_eq!(String::from_utf8(paused.stdout)?.trim(), "Work saved");
 
     let exhausted = run_exec(/*json_output*/ false, /*exhausted*/ true).await?;
     let stderr = String::from_utf8(exhausted.stderr)?;
-    assert!(stderr.contains("context window: 190,000 of 190,000 tokens used"), "{stderr}");
+    assert!(
+        stderr.contains("context window: 190,000 of 190,000 tokens used"),
+        "{stderr}"
+    );
     assert!(!stderr.contains("context pause threshold"), "{stderr}");
     assert!(exhausted.stdout.is_empty(), "{:?}", exhausted.stdout);
     Ok(())
