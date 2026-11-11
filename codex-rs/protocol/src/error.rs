@@ -114,6 +114,9 @@ pub enum CodexErrorDetails {
     /// The Session loop treats this as a transient error and will automatically retry the turn.
     #[error("stream disconnected before completion: {0}")]
     Stream(String),
+    /// A failed response with `server_error` and no reported output.
+    #[error("stream disconnected before completion: {0}")]
+    ServerErrorBeforeOutput(String),
     /// A response stopped by the content filter. Sampling retries need developer guidance.
     #[error(
         "stream disconnected before completion: Incomplete response returned, reason: content_filter"
@@ -458,6 +461,7 @@ impl CodexErr {
             | CodexErrorDetails::PolicyCapacityUnavailable
             | CodexErrorDetails::RetryLimit(_) => self.server_retry_delay(),
             CodexErrorDetails::Stream(..)
+            | CodexErrorDetails::ServerErrorBeforeOutput(_)
             | CodexErrorDetails::ContentFilter
             | CodexErrorDetails::RateLimitExceeded(_)
             | CodexErrorDetails::Timeout

@@ -2,7 +2,6 @@
 
 use codex_protocol::dynamic_tools::DynamicToolSpec;
 use codex_protocol::models::BaseInstructionsProvenance;
-#[cfg(test)]
 use codex_protocol::models::ResponseItem;
 use codex_protocol::openai_models::ReasoningEffort;
 use std::collections::HashSet;
@@ -22,6 +21,7 @@ use crate::session::startup_prewarm::SessionStartupPrewarmHandle;
 use crate::session::time_reminder::CurrentTimeReminderState;
 use codex_history::ResponseItemEnvelope;
 use codex_history::TurnAttribution;
+use codex_protocol::ResponseItemId;
 use codex_protocol::SessionId;
 use codex_protocol::ThreadId;
 use codex_protocol::protocol::RateLimitSnapshot;
@@ -81,6 +81,7 @@ pub(crate) struct SessionState {
     pub(crate) history_reset: CancellationToken,
     pub(crate) latest_rate_limits: Option<RateLimitSnapshot>,
     pub(crate) latest_token_usage_record: Option<TokenUsageRecord>,
+    pub(crate) omitted_reasoning_ids: HashSet<ResponseItemId>,
     pub(crate) mcp_dependency_prompted: HashSet<String>,
     pub(crate) additional_context: AdditionalContextStore,
     /// Settings used by the latest regular user turn, used for turn-to-turn
@@ -135,6 +136,7 @@ impl SessionState {
             history_reset: CancellationToken::new(),
             latest_rate_limits: None,
             latest_token_usage_record: None,
+            omitted_reasoning_ids: HashSet::new(),
             mcp_dependency_prompted: HashSet::new(),
             additional_context: AdditionalContextStore::default(),
             previous_turn_settings: None,
@@ -183,6 +185,16 @@ impl SessionState {
 
     pub(crate) fn clone_history(&self) -> ContextManager {
         self.history.clone()
+    }
+
+    pub(crate) fn omit_past_reasoning(&mut self) -> usize {
+        let before = self.omitted_reasoning_ids.len();
+        self.omitted_reasoning_ids
+            .extend(self.history.raw_items().filter_map(|item| match item {
+                ResponseItem::Reasoning { id, .. } => id.clone(),
+                _ => None,
+            }));
+        self.omitted_reasoning_ids.len() - before
     }
 
     #[cfg(test)]

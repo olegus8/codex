@@ -1862,6 +1862,7 @@ async fn run_sampling_request(
         incremental_tools,
     );
     let mut retry_state = ResponsesStreamRetryState::default();
+    let mut consecutive_server_errors = 0;
     let mut initial_input = Some(input);
     let mut notify_messages = Vec::new();
     let mut executed_tool_calls_by_output = HashMap::new();
@@ -1881,6 +1882,17 @@ async fn run_sampling_request(
                 sess.services.image_store.as_ref(),
             )
             .await;
+        {
+            let state = sess.state.lock().await;
+            if !state.omitted_reasoning_ids.is_empty() {
+                prompt_input.retain(|item| match item {
+                    ResponseItem::Reasoning { id: Some(id), .. } => {
+                        !state.omitted_reasoning_ids.contains(id)
+                    }
+                    _ => true,
+                });
+            }
+        }
         sess.services
             .executed_tool_calls
             .attach_to_prompt(&mut prompt_input, &mut executed_tool_calls_by_output);
@@ -1950,6 +1962,20 @@ async fn run_sampling_request(
                 _ => err,
             },
         };
+
+        if matches!(err.details(), CodexErrorDetails::ServerErrorBeforeOutput(_)) {
+            consecutive_server_errors += 1;
+            if consecutive_server_errors == 2 {
+                let omitted = sess.state.lock().await.omit_past_reasoning();
+                warn!(
+                    turn_id = %turn_context.sub_id,
+                    omitted,
+                    "server repeatedly failed the request; omitting past reasoning"
+                );
+            }
+        } else {
+            consecutive_server_errors = 0;
+        }
 
         let retry = handle_response_stream_error(
             &mut retry_state,
@@ -2939,6 +2965,7 @@ async fn try_run_sampling_request(
     let defer_streamed_turn_items_for_contributors =
         !sess.services.extensions.turn_item_contributors().is_empty();
     let mut active_item_is_streaming_to_client = false;
+    let mut received_output = false;
     let receiving_span = trace_span!("receiving_stream");
     let outcome: CodexResult<SamplingRequestResult> = loop {
         let handle_responses = trace_span!(
@@ -3020,12 +3047,26 @@ async fn try_run_sampling_request(
                     .await;
                     should_emit_token_count |= incomplete.token_usage.is_some();
                 }
-                if *draining_for_mailbox && matches!(err.details(), CodexErrorDetails::Stream(_)) {
+                if *draining_for_mailbox
+                    && matches!(
+                        err.details(),
+                        CodexErrorDetails::Stream(_) | CodexErrorDetails::ServerErrorBeforeOutput(_)
+                    )
+                {
                     // Mail already requires a follow-up, even if the producer exited before
                     // receiving the interrupt. Do not retry without that pending input.
                     break Ok(SamplingRequestResult {
                         needs_follow_up: true,
                         last_agent_message,
+                    });
+                }
+                if received_output
+                    && let CodexErrorDetails::ServerErrorBeforeOutput(message) = err.details()
+                {
+                    let stream_error = CodexErr::Stream(message.clone());
+                    break Err(match err.retry_after() {
+                        Some(retry_after) => stream_error.with_retry_after(retry_after),
+                        None => stream_error,
                     });
                 }
                 break Err(err);
@@ -3037,6 +3078,16 @@ async fn try_run_sampling_request(
             .record_responses(&handle_responses, &event);
         record_turn_ttft_metric(&turn_context, &event).await;
 
+        received_output |= matches!(
+            &event,
+            ResponseEvent::OutputItemAdded(_)
+                | ResponseEvent::OutputItemDone(_)
+                | ResponseEvent::OutputTextDelta(_)
+                | ResponseEvent::ToolCallInputDelta { .. }
+                | ResponseEvent::ReasoningSummaryDelta { .. }
+                | ResponseEvent::ReasoningSummaryDone { .. }
+                | ResponseEvent::ReasoningContentDelta { .. }
+        );
         match event {
             ResponseEvent::Created { response_id } => {
                 response_id_for_assessment.clone_from(&response_id);
