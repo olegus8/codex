@@ -44,3 +44,12 @@ impl From<codex_protocol::protocol::ContextPause> for ContextPause {
         }
     }
 }
+
+/// A thread is waiting for explicit user input after a context pause.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct WaitingContextPause {
+    /// Absent when restored from a checkpoint that predates pause details.
+    pub details: Option<ContextPause>,
+}

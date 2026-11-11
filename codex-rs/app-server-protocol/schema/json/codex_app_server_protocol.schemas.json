@@ -22574,6 +22574,17 @@
           },
           "thread": {
             "$ref": "#/definitions/v2/Thread"
+          },
+          "waitingContextPause": {
+            "anyOf": [
+              {
+                "$ref": "#/definitions/v2/WaitingContextPause"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Context pause currently waiting for user input in the fork."
           }
         },
         "required": [
@@ -25181,6 +25192,17 @@
               "string",
               "null"
             ]
+          },
+          "waitingContextPause": {
+            "anyOf": [
+              {
+                "$ref": "#/definitions/v2/WaitingContextPause"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Context pause currently waiting for user input."
           }
         },
         "required": [
@@ -27519,6 +27541,23 @@
           "high"
         ],
         "type": "string"
+      },
+      "WaitingContextPause": {
+        "description": "A thread is waiting for explicit user input after a context pause.",
+        "properties": {
+          "details": {
+            "anyOf": [
+              {
+                "$ref": "#/definitions/v2/ContextPause"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Absent when restored from a checkpoint that predates pause details."
+          }
+        },
+        "type": "object"
       },
       "WarningNotification": {
         "$schema": "http://json-schema.org/draft-07/schema#",

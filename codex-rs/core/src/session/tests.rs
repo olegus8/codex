@@ -6376,7 +6376,7 @@ async fn a_compaction_carries_the_pause_into_a_bounded_resume() {
         resumed_by_user: false,
     };
     let pause_event = RolloutItem::EventMsg(EventMsg::TurnComplete(TurnCompleteEvent {
-        context_pause: Some(pause),
+        context_pause: Some(pause.clone()),
         root_turn_id: None,
         turn_id: turn_context.sub_id.clone(),
         last_agent_message: None,
@@ -6417,6 +6417,7 @@ async fn a_compaction_carries_the_pause_into_a_bounded_resume() {
         context_pause: Some(codex_history::CompactionContextPause {
             thread_id: session.thread_id(),
             waiting_for_user: true,
+            details: Some(pause),
         }),
         dynamic_tools: Some(Box::new(DynamicToolsSnapshot {
             thread_id: session.thread_id(),

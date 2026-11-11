@@ -3164,6 +3164,23 @@
         }
       ]
     },
+    "WaitingContextPause": {
+      "description": "A thread is waiting for explicit user input after a context pause.",
+      "properties": {
+        "details": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ContextPause"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Absent when restored from a checkpoint that predates pause details."
+        }
+      },
+      "type": "object"
+    },
     "WebSearchAction": {
       "oneOf": [
         {
@@ -3356,6 +3373,17 @@
         "string",
         "null"
       ]
+    },
+    "waitingContextPause": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/WaitingContextPause"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Context pause currently waiting for user input."
     }
   },
   "required": [

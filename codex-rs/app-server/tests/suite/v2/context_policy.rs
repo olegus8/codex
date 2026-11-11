@@ -3,12 +3,15 @@ use std::time::Duration;
 use anyhow::Result;
 use app_test_support::MockResponsesConfig;
 use app_test_support::TestAppServer;
+use codex_app_server_protocol::ClientRequest;
 use codex_app_server_protocol::CodexErrorInfo;
 use codex_app_server_protocol::ThreadHistoryMode;
 use codex_app_server_protocol::ThreadReadParams;
 use codex_app_server_protocol::ThreadReadResponse;
 use codex_app_server_protocol::ThreadResumeParams;
 use codex_app_server_protocol::ThreadResumeResponse;
+use codex_app_server_protocol::ThreadShellCommandParams;
+use codex_app_server_protocol::ThreadShellCommandResponse;
 use codex_app_server_protocol::ThreadStartParams;
 use codex_app_server_protocol::ThreadStartResponse;
 use codex_app_server_protocol::ThreadTimelineEntry;
@@ -175,10 +178,33 @@ async fn context_policy_public_outcomes(
             let saved: ThreadReadResponse = app.read_response(read).await?;
             assert_eq!(saved.thread.turns[0].context_pause.as_ref(), Some(&pause));
         }
+        let resumed = resume_without_turns(&mut app, &thread.id).await?;
+        let waiting = resumed
+            .waiting_context_pause
+            .expect("waiting for a handoff");
+        assert_eq!(waiting.details.as_ref(), Some(&pause));
+
+        let _: ThreadShellCommandResponse = app
+            .request(|request_id| ClientRequest::ThreadShellCommand {
+                request_id,
+                params: ThreadShellCommandParams {
+                    thread_id: thread.id.clone(),
+                    command: "echo handoff".to_string(),
+                    timeout_ms: None,
+                },
+            })
+            .await?;
+        app.read_stream_until_notification_message("turn/completed")
+            .await?;
+        let resumed = resume_without_turns(&mut app, &thread.id).await?;
+        assert_eq!(resumed.waiting_context_pause, Some(waiting));
+
         let handoff = app
             .start_turn_and_wait_for_completion(input("Write a handoff"))
             .await?;
         assert!(handoff.turn.context_pause.is_none());
+        let resumed = resume_without_turns(&mut app, &thread.id).await?;
+        assert_eq!(resumed.waiting_context_pause, None);
     }
     let request = follow_up.single_request();
     assert_eq!(
@@ -264,4 +290,19 @@ async fn context_policy_public_outcomes_pause_before_sampling() -> Result<()> {
     .await??;
     assert_eq!(replayed, live);
     Ok(())
+}
+
+async fn resume_without_turns(
+    app: &mut TestAppServer,
+    thread_id: &str,
+) -> Result<ThreadResumeResponse> {
+    app.request(|request_id| ClientRequest::ThreadResume {
+        request_id,
+        params: ThreadResumeParams {
+            thread_id: thread_id.to_string(),
+            exclude_turns: true,
+            ..Default::default()
+        },
+    })
+    .await
 }

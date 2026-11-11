@@ -652,6 +652,7 @@ export type { TurnSteerResponse } from "./TurnSteerResponse";
 export type { TurnToolOutput } from "./TurnToolOutput";
 export type { TurnsPage } from "./TurnsPage";
 export type { UserInput } from "./UserInput";
+export type { WaitingContextPause } from "./WaitingContextPause";
 export type { WarningNotification } from "./WarningNotification";
 export type { WebSearchAction } from "./WebSearchAction";
 export type { WindowsSandboxImplementation } from "./WindowsSandboxImplementation";

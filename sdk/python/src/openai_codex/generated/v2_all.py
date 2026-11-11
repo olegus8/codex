@@ -6853,6 +6853,16 @@ class Verbosity(Enum):
     high = "high"
 
 
+class WaitingContextPause(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+    details: Annotated[
+        ContextPause | None,
+        Field(description="Absent when restored from a checkpoint that predates pause details."),
+    ] = None
+
+
 class WarningNotification(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
@@ -12967,6 +12977,13 @@ class ThreadForkResponse(BaseModel):
     ]
     service_tier: Annotated[str | None, Field(alias="serviceTier")] = None
     thread: Thread
+    waiting_context_pause: Annotated[
+        WaitingContextPause | None,
+        Field(
+            alias="waitingContextPause",
+            description="Context pause currently waiting for user input in the fork.",
+        ),
+    ] = None
 
 
 class ThreadListResponse(BaseModel):
@@ -13062,6 +13079,13 @@ class ThreadResumeResponse(BaseModel):
         Field(
             alias="turnsBackwardsCursor",
             description='Opaque cursor for hydrating paginated turns backwards.\n\nPass this as `cursor` to `thread/turns/list` with `sortDirection: "desc"`. The first page includes the turn identified by the cursor.',
+        ),
+    ] = None
+    waiting_context_pause: Annotated[
+        WaitingContextPause | None,
+        Field(
+            alias="waitingContextPause",
+            description="Context pause currently waiting for user input.",
         ),
     ] = None
 

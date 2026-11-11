@@ -2,6 +2,7 @@ use super::*;
 use codex_app_server_protocol::ContextPause;
 use codex_app_server_protocol::ContextWindowUsage;
 use codex_app_server_protocol::ThreadItem as AppServerThreadItem;
+use codex_app_server_protocol::WaitingContextPause;
 use pretty_assertions::assert_eq;
 
 fn paused_turn() -> AppServerTurn {
@@ -151,23 +152,33 @@ async fn context_policy_exhaustion_keeps_queued_work() {
 
 #[tokio::test]
 async fn context_policy_pause_replays_until_a_later_user_message() {
-    let (mut chat, mut rx, _ops) = make_chatwidget_manual(/*model_override*/ None).await;
+    let (mut chat, mut rx, mut ops) = make_chatwidget_manual(/*model_override*/ None).await;
+    chat.thread_id = Some(ThreadId::new());
+    handle_turn_started(&mut chat, "pause");
+    chat.queue_user_message("Queued work".into());
     let mut pause = paused_turn();
     pause.items_view = codex_app_server_protocol::TurnItemsView::NotLoaded;
-    let mut compaction = app_server_turn(
-        "compaction",
-        AppServerTurnStatus::Completed,
-        /*duration_ms*/ None,
-        /*error*/ None,
-    );
-    compaction.items_view = codex_app_server_protocol::TurnItemsView::NotLoaded;
-    chat.replay_thread_turns(vec![pause, compaction], ReplayKind::ResumeInitialMessages);
+    let report = WaitingContextPause {
+        details: pause.context_pause.clone(),
+    };
+    chat.replay_thread_turns(vec![pause.clone()], ReplayKind::ResumeInitialMessages);
+    chat.restore_context_pause(Some(&report));
+    // Loading the paused turn's items and replaying the turn must not add a notice.
+    pause.items_view = codex_app_server_protocol::TurnItemsView::Full;
+    chat.replay_thread_turns(vec![pause], ReplayKind::ThreadSnapshot);
     assert!(chat.input_queue.context_input_required);
+    assert!(!chat.maybe_send_next_queued_input());
+    assert!(ops.try_recv().is_err());
     let history: Vec<_> = drain_insert_history(&mut rx)
         .into_iter()
         .flatten()
         .collect();
-    assert!(lines_to_single_string(&history).contains("request a handoff"));
+    assert_eq!(
+        lines_to_single_string(&history)
+            .matches("request a handoff")
+            .count(),
+        1,
+    );
 
     let mut handoff = app_server_turn(
         "handoff",
@@ -183,6 +194,8 @@ async fn context_policy_pause_replays_until_a_later_user_message() {
         },
     )];
     chat.replay_thread_turns(vec![handoff], ReplayKind::ThreadSnapshot);
+    assert!(chat.input_queue.context_input_required);
+    chat.restore_context_pause(None);
     assert!(!chat.input_queue.context_input_required);
 }
 
