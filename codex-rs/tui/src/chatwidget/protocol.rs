@@ -450,6 +450,9 @@ impl ChatWidget {
         self.thread_usage.replaying_turn_completion = replay_kind.is_some();
         match notification.turn.status {
             TurnStatus::Completed => {
+                if notification.turn.context_pause.is_some() {
+                    self.input_queue.context_input_required = true;
+                }
                 let last_agent_message =
                     notification
                         .turn
@@ -500,6 +503,20 @@ impl ChatWidget {
                     completion,
                     replay_kind.is_some(),
                 );
+                if let Some(pause) = notification.turn.context_pause {
+                    use codex_protocol::num_format::format_with_separators;
+
+                    self.add_to_history(history_cell::new_info_event(
+                        format!(
+                            "Paused at the {}% context threshold ({} of {} tokens used).",
+                            pause.threshold_percent,
+                            format_with_separators(pause.used_tokens),
+                            format_with_separators(pause.context_window),
+                        ),
+                        Some("Send a message to continue or request a handoff.".into()),
+                    ));
+                    self.request_redraw();
+                }
             }
             TurnStatus::Interrupted => {
                 if replay_kind.is_none() {
@@ -670,6 +687,11 @@ impl ChatWidget {
         replay_kind: Option<ReplayKind>,
     ) {
         self.restore_realtime_transcripts_before_turn(&notification.turn_id);
+        if !self.review.is_review_mode
+            && matches!(&notification.item.payload, ThreadItemPayload::UserMessage { .. })
+        {
+            self.input_queue.context_input_required = false;
+        }
         if replay_kind.is_none()
             && self.is_realtime_delegated_reasoning_turn(&notification.turn_id)
             && realtime::is_private_realtime_agent_item(&notification.item.payload)
