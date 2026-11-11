@@ -68,7 +68,9 @@ def terminal(case):
     stage = 0
     turn_start = 0
     working = b"\x1b]7501;state=working:app=codex\x1b\\"
-    completed = re.compile(rb"\x1b\]7501;state=(done|idle|error):app=codex\x1b\\")
+    completed = re.compile(
+        rb"\x1b\]7501;state=(done|idle|error):app=codex\x1b\\"
+    )
     deadline = time.monotonic() + 90
     next_quit = None
     try:
