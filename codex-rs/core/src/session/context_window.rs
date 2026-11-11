@@ -39,6 +39,7 @@ pub(super) async fn record_exhaustion(
             last_token_usage: TokenUsage::default(),
             last_usage_includes_reasoning: None,
             model_context_window: None,
+            context_window_usage: None,
         });
         // The exhausted window is a context count, not additional provider spending.
         info.last_token_usage.total_tokens = info.last_token_usage.total_tokens.max(usable_window);
@@ -46,7 +47,8 @@ pub(super) async fn record_exhaustion(
         info.model_context_window = Some(usable_window);
         state.set_token_info(Some(info));
     }
-    sess.send_token_count_event(turn_context).await;
+    sess.send_context_token_count(turn_context, /*exhausted*/ true)
+        .await;
 }
 
 pub(crate) async fn context_window_token_status(
