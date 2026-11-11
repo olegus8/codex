@@ -16,6 +16,7 @@ use test_case::test_case;
 
 #[test_case(118_000, true; "below threshold with config switch")]
 #[test_case(127_000, true; "above threshold with config switch")]
+#[test_case(170_000, true; "below exhaustion with config switch")]
 #[test_case(118_000, false; "below threshold with thread flag")]
 #[test_case(127_000, false; "above threshold with thread flag")]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

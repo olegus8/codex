@@ -618,7 +618,7 @@ pub(crate) async fn run_turn(
                     .token_info()
                     .is_some_and(|info| info.last_token_usage.total_tokens > 0)
                 {
-                    sampling_request_input.get_total_token_usage()
+                    sampling_request_input.get_reported_token_usage()
                 } else {
                     let base_instructions = sess.get_prompt_base_instructions().await;
                     sampling_request_input
