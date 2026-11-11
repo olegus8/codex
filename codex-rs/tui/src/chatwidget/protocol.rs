@@ -688,7 +688,10 @@ impl ChatWidget {
     ) {
         self.restore_realtime_transcripts_before_turn(&notification.turn_id);
         if !self.review.is_review_mode
-            && matches!(&notification.item.payload, ThreadItemPayload::UserMessage { .. })
+            && matches!(
+                &notification.item.payload,
+                ThreadItemPayload::UserMessage { .. }
+            )
         {
             self.input_queue.context_input_required = false;
         }

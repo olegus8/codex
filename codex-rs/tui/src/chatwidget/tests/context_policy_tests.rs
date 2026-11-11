@@ -58,13 +58,46 @@ async fn context_policy_pause_preserves_queue_and_accepts_handoff() {
     submit(&mut chat, "Write a handoff");
     assert_matches!(next_submit_op(&mut ops), Op::UserTurn { .. });
     assert_eq!(chat.queued_user_message_texts(), ["Queued work"]);
+    assert!(chat.input_queue.context_input_required);
+    handle_turn_started(&mut chat, "handoff");
+    chat.handle_server_notification(
+        ServerNotification::ItemCompleted(ItemCompletedNotification::new(
+            chat.thread_id.unwrap().to_string(),
+            "handoff".into(),
+            AppServerThreadItemPayload::UserMessage {
+                id: "handoff-request".into(),
+                client_id: None,
+                content: vec![AppServerUserInput::Text {
+                    text: "Write a handoff".into(),
+                    text_elements: Vec::new(),
+                }],
+            },
+            /*started_at_ms*/ None,
+            /*completed_at_ms*/ 0,
+        )),
+        /*replay_kind*/ None,
+    );
+    assert!(!chat.input_queue.context_input_required);
+    complete_turn(
+        &mut chat,
+        app_server_turn(
+            "handoff",
+            AppServerTurnStatus::Completed,
+            /*duration_ms*/ None,
+            /*error*/ None,
+        ),
+    );
+    assert_matches!(next_submit_op(&mut ops), Op::UserTurn { .. });
+    assert!(chat.queued_user_message_texts().is_empty());
 }
 
 #[tokio::test]
 async fn context_policy_usage_uses_runtime_accounting() {
     let (mut chat, mut rx, _ops) = make_chatwidget_manual(/*model_override*/ None).await;
     chat.local_settings.tui.status_line = Some(vec!["context-remaining".into()]);
-    let mut info = make_token_info(/*total_tokens*/ 120_000, /*context_window*/ 200_000);
+    let mut info = make_token_info(
+        /*total_tokens*/ 120_000, /*context_window*/ 200_000,
+    );
     info.context_window_usage = Some(ContextWindowUsage {
         used_tokens: 133_000,
         context_window: 190_000,
@@ -79,7 +112,10 @@ async fn context_policy_usage_uses_runtime_accounting() {
         render_bottom_popup(&chat, /*width*/ 80),
     );
     chat.dispatch_command(SlashCommand::Status);
-    let history: Vec<_> = drain_insert_history(&mut rx).into_iter().flatten().collect();
+    let history: Vec<_> = drain_insert_history(&mut rx)
+        .into_iter()
+        .flatten()
+        .collect();
     let status = lines_to_single_string(&history);
     assert!(status.contains("30% left"), "{status}");
     assert!(status.contains("133K used / 190K"), "{status}");
@@ -90,7 +126,9 @@ async fn context_policy_exhaustion_keeps_queued_work() {
     let (mut chat, mut rx, mut ops) = make_chatwidget_manual(/*model_override*/ None).await;
     chat.thread_id = Some(ThreadId::new());
     handle_turn_started(&mut chat, "turn-1");
-    let mut info = make_token_info(/*total_tokens*/ 200_000, /*context_window*/ 190_000);
+    let mut info = make_token_info(
+        /*total_tokens*/ 200_000, /*context_window*/ 190_000,
+    );
     info.context_window_usage = Some(ContextWindowUsage {
         used_tokens: 200_000,
         context_window: 190_000,
@@ -104,7 +142,10 @@ async fn context_policy_exhaustion_keeps_queued_work() {
     assert!(!chat.maybe_send_next_queued_input());
     assert!(ops.try_recv().is_err());
     assert_eq!(chat.queued_user_message_texts(), ["Queued work"]);
-    let history: Vec<_> = drain_insert_history(&mut rx).into_iter().flatten().collect();
+    let history: Vec<_> = drain_insert_history(&mut rx)
+        .into_iter()
+        .flatten()
+        .collect();
     assert_chatwidget_snapshot!("context_policy_exhausted", lines_to_single_string(&history));
 }
 
@@ -122,7 +163,10 @@ async fn context_policy_pause_replays_until_a_later_user_message() {
     compaction.items_view = codex_app_server_protocol::TurnItemsView::NotLoaded;
     chat.replay_thread_turns(vec![pause, compaction], ReplayKind::ResumeInitialMessages);
     assert!(chat.input_queue.context_input_required);
-    let history: Vec<_> = drain_insert_history(&mut rx).into_iter().flatten().collect();
+    let history: Vec<_> = drain_insert_history(&mut rx)
+        .into_iter()
+        .flatten()
+        .collect();
     assert!(lines_to_single_string(&history).contains("request a handoff"));
 
     let mut handoff = app_server_turn(
@@ -131,11 +175,13 @@ async fn context_policy_pause_replays_until_a_later_user_message() {
         /*duration_ms*/ None,
         /*error*/ None,
     );
-    handoff.items = vec![AppServerThreadItem::untimed(AppServerThreadItemPayload::UserMessage {
-        id: "handoff-request".into(),
-        client_id: None,
-        content: Vec::new(),
-    })];
+    handoff.items = vec![AppServerThreadItem::untimed(
+        AppServerThreadItemPayload::UserMessage {
+            id: "handoff-request".into(),
+            client_id: None,
+            content: Vec::new(),
+        },
+    )];
     chat.replay_thread_turns(vec![handoff], ReplayKind::ThreadSnapshot);
     assert!(!chat.input_queue.context_input_required);
 }
