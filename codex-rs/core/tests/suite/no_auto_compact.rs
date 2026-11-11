@@ -49,7 +49,7 @@ async fn no_auto_compact_model_change_preserves_history(hash_change: bool) -> Re
         vec![
             sse(vec![
                 ev_assistant_message("before", "Before model change"),
-                ev_completed_with_tokens("before", /*total_tokens*/ 120_000),
+                ev_completed_with_tokens("before", /*total_tokens*/ 80_000),
             ]),
             sse(vec![
                 ev_assistant_message("after", "After model change"),
