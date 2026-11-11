@@ -1,6 +1,7 @@
 use super::context_window::ContextWindowTokenStatus;
 use super::session::Session;
 use super::turn_context::TurnContext;
+use crate::compact::automatic_compaction_configured;
 use codex_history::CompactionContextPause;
 use codex_history::RolloutItem;
 use codex_history::UserInputOrigin;
@@ -106,7 +107,8 @@ pub(super) async fn acknowledge_user_input(session: &Session, explicit_user: boo
 }
 
 pub(super) async fn can_pause(session: &Session, turn: &TurnContext) -> bool {
-    turn.config.model_context_pause_percent.is_some()
+    !automatic_compaction_configured(turn)
+        && turn.config.model_context_pause_percent.is_some()
         && !session.state.lock().await.context_pause.reached
 }
 
@@ -114,6 +116,9 @@ pub(super) fn reached_threshold(
     turn: &TurnContext,
     status: &ContextWindowTokenStatus,
 ) -> Option<(u8, i64)> {
+    if automatic_compaction_configured(turn) || status.full_context_window_limit_reached {
+        return None;
+    }
     let threshold_percent = turn.config.model_context_pause_percent?;
     let context_window = status.full_context_window_limit?;
     (context_window > 0

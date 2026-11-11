@@ -1892,8 +1892,12 @@ async fn guardian_reviews_delayed_and_new_actions_after_catalog_refresh() -> Res
     Ok(())
 }
 
+#[test_case(false; "default policy")]
+#[test_case(true; "context pause threshold crossed")]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn guardian_session_is_reused_for_consecutive_tool_reviews_without_prewarm() -> Result<()> {
+async fn guardian_session_is_reused_for_consecutive_tool_reviews_without_prewarm(
+    context_pause: bool,
+) -> Result<()> {
     skip_if_no_network!(Ok(()));
     skip_if_sandbox!(Ok(()));
     skip_if_wine_exec!(
@@ -1911,6 +1915,11 @@ async fn guardian_session_is_reused_for_consecutive_tool_reviews_without_prewarm
         .with_model_info_override("gpt-5.4", |_| {})
         .with_extensions(Arc::new(extensions.build()))
         .with_config(move |config| {
+            if context_pause {
+                config.model_auto_compact_enabled = false;
+                config.model_context_pause_percent = Some(70);
+                config.model_context_window = Some(200_000);
+            }
             let secret_file = config.cwd.join("guardian-secret.txt");
             config.permissions.approval_policy = Constrained::allow_any(approval_policy);
             config.approvals_reviewer = ApprovalsReviewer::AutoReview;
@@ -2008,7 +2017,14 @@ async fn guardian_session_is_reused_for_consecutive_tool_reviews_without_prewarm
                     })
                     .to_string(),
                 ),
-                ev_completed("resp-guardian-first-assessment"),
+                if context_pause {
+                    ev_completed_with_tokens(
+                        "resp-guardian-first-assessment",
+                        /*total_tokens*/ 134_000,
+                    )
+                } else {
+                    ev_completed("resp-guardian-first-assessment")
+                },
             ]),
             sse(vec![
                 ev_response_created("resp-parent-first-done"),

@@ -5123,7 +5123,7 @@ async fn open_thread_persistence(session: &mut Session) -> PathBuf {
         .expect("thread should have rollout path")
 }
 
-async fn attach_thread_persistence(session: &mut Session) -> PathBuf {
+pub(super) async fn attach_thread_persistence(session: &mut Session) -> PathBuf {
     let rollout_path = open_thread_persistence(session).await;
     session
         .ensure_rollout_materialized(PersistContext::Standard)
