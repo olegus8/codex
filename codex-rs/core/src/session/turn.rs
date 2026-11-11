@@ -3036,9 +3036,8 @@ async fn try_run_sampling_request(
     let mut check_pause_after_item = false;
     let outcome: CodexResult<SamplingRequestResult> = loop {
         if std::mem::take(&mut check_pause_after_item) && !cancellation_token.is_cancelled() {
-            let status = super::context_window::context_window_token_status_for_model(
+            let status = super::context_window::context_window_token_status_for_sampling_model(
                 &sess,
-                &turn_context.config,
                 &turn_context,
                 &step_context.settings.model_info,
             )

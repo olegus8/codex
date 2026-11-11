@@ -123,6 +123,25 @@ pub(crate) async fn context_window_token_status_for_model(
     context_window_token_status_with_config(sess, active_context_tokens, &config, model_info).await
 }
 
+pub(super) async fn context_window_token_status_for_sampling_model(
+    sess: &Session,
+    turn_context: &TurnContext,
+    model_info: &ModelInfo,
+) -> ContextWindowTokenStatus {
+    let mut config = turn_context.config.as_ref().clone();
+    config.token_budget = super::token_budget::resolve_token_budget(
+        turn_context.configured_token_budget.as_ref(),
+        turn_context.use_model_token_budget_defaults,
+        model_info,
+    );
+    let active_context_tokens = if automatic_compaction_enabled(sess, turn_context) {
+        sess.get_total_token_usage().await
+    } else {
+        sess.get_reported_token_usage().await
+    };
+    context_window_token_status_with_config(sess, active_context_tokens, &config, model_info).await
+}
+
 async fn context_window_token_status_with_config(
     sess: &Session,
     active_context_tokens: i64,

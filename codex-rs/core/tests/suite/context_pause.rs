@@ -146,6 +146,42 @@ async fn context_pause_stops_before_the_next_model_request(
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn context_pause_stream_counts_past_reasoning_once() -> Result<()> {
+    skip_if_no_network!(Ok(()));
+    let server = start_mock_server().await;
+    let past_reasoning = "x".repeat(160_000);
+    mount_sse_once(
+        &server,
+        sse(vec![
+            ev_reasoning_item("past-reasoning", &[], &[past_reasoning.as_str()]),
+            ev_assistant_message("m1", "Earlier turn complete"),
+            ev_completed_with_tokens("r1", /*total_tokens*/ 120_000),
+        ]),
+    )
+    .await;
+    let streamed = mount_sse_once(
+        &server,
+        sse(vec![
+            ev_reasoning_item("current-reasoning", &[], &["Current reasoning"]),
+            ev_assistant_message("m2", "Long stream complete"),
+            ev_completed_with_tokens("r2", /*total_tokens*/ 120_000),
+        ]),
+    )
+    .await;
+    let test = builder().build_with_auto_env(&server).await?;
+    assert!(turn(&test, "Keep the earlier reasoning").await?["context_pause"].is_null());
+    let completed = turn(&test, "Continue with the long stream").await?;
+    assert!(completed["context_pause"].is_null(), "{completed}");
+    assert_eq!(completed["last_agent_message"], "Long stream complete");
+    assert_eq!(streamed.requests().len(), 1);
+    let usage = test.codex.token_usage_info().await.expect("reported usage");
+    let window = usage.context_window_usage.expect("usable window usage");
+    assert_eq!(window.context_window, 190_000);
+    assert!((120_000..121_000).contains(&window.used_tokens));
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn context_pause_stops_at_the_first_completed_item_in_a_long_stream() -> Result<()> {
     skip_if_no_network!(Ok(()));
     let server = start_mock_server().await;
