@@ -100,7 +100,6 @@ class Scenario:
             "model_provider": "fixture",
             "model_context_window": 200000,
             "model_auto_compact_token_limit": 180000,
-            "model_context_pause_percent": 70,
             "model_providers.fixture.name": "Offline context fixture",
             "model_providers.fixture.base_url": "http://127.0.0.1:"
             + str(self.fixture.server.server_port),
@@ -124,6 +123,7 @@ class Scenario:
         }
         if not auto:
             options["model_auto_compact_enabled"] = False
+            options["model_context_pause_percent"] = 70
         if hooks == "installed":
             options["tools.experimental_request_user_input.enabled"] = False
         config = self.directory / "system"

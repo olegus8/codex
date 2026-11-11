@@ -5561,11 +5561,15 @@ impl Session {
     }
 
     pub(crate) async fn send_token_count_event(&self, turn_context: &TurnContext) {
-        self.send_context_token_count(turn_context, /*exhausted*/ false)
+        self.send_context_token_count(turn_context, /*reported_window*/ None)
             .await;
     }
 
-    async fn send_context_token_count(&self, turn_context: &TurnContext, exhausted: bool) {
+    async fn send_context_token_count(
+        &self,
+        turn_context: &TurnContext,
+        reported_window: Option<ContextWindowUsage>,
+    ) {
         let (info, rate_limits) = {
             let state = self.state.lock().await;
             let (mut info, rate_limits) = state.token_info_and_rate_limits();
@@ -5577,16 +5581,17 @@ impl Session {
                             .thread_extension_data
                             .get::<crate::compact::AutoCompactionDisabled>()
                             .is_some())
-                    .then(|| turn_context.model_context_window())
-                    .flatten()
-                    .map(|context_window| ContextWindowUsage {
-                        used_tokens: if exhausted {
-                            context_window
-                        } else {
-                            state.get_reported_token_usage()
-                        },
-                        context_window,
-                    });
+                    .then(|| {
+                        reported_window.or_else(|| {
+                            turn_context.model_context_window().map(|context_window| {
+                                ContextWindowUsage {
+                                    used_tokens: state.get_reported_token_usage(),
+                                    context_window,
+                                }
+                            })
+                        })
+                    })
+                    .flatten();
             }
             (info, rate_limits)
         };
@@ -5595,12 +5600,19 @@ impl Session {
     }
 
     pub(crate) async fn set_total_tokens_full(&self, turn_context: &TurnContext) {
-        if let Some(context_window) = turn_context.model_context_window() {
+        let context_window = turn_context.model_context_window();
+        if let Some(context_window) = context_window {
             let mut state = self.state.lock().await;
             state.set_token_usage_full(context_window);
         }
-        self.send_context_token_count(turn_context, /*exhausted*/ true)
-            .await;
+        self.send_context_token_count(
+            turn_context,
+            context_window.map(|context_window| ContextWindowUsage {
+                used_tokens: context_window,
+                context_window,
+            }),
+        )
+        .await;
     }
 
     pub(crate) async fn record_response_item_and_emit_turn_item(

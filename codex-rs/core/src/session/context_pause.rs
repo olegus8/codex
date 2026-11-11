@@ -116,6 +116,11 @@ pub(super) fn reached_threshold(
 ) -> Option<(u8, i64)> {
     let threshold_percent = turn.config.model_context_pause_percent?;
     let context_window = status.full_context_window_limit?;
+    if status.full_context_window_limit_reached
+        && !crate::compact::automatic_compaction_configured(turn)
+    {
+        return None;
+    }
     (context_window > 0
         && i128::from(status.active_context_tokens) * 100
             >= i128::from(context_window) * i128::from(threshold_percent))
