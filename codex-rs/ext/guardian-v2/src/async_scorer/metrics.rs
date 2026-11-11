@@ -50,7 +50,9 @@ pub(super) fn sampler_failure_reason(error: &LunaSamplerError) -> &'static str {
             ApiError::ContextWindowExceeded => "context_window_exceeded",
             ApiError::QuotaExceeded => "quota_exceeded",
             ApiError::UsageNotIncluded => "usage_not_included",
-            ApiError::Retryable { .. } => "retryable_api_error",
+            ApiError::Retryable { .. } | ApiError::ServerErrorBeforeOutput { .. } => {
+                "retryable_api_error"
+            }
             ApiError::RateLimitExceeded { .. } | ApiError::RateLimit(_) => "rate_limit",
             ApiError::ModelNotFound { .. } => "model_not_found",
             ApiError::InvalidRequest { .. }

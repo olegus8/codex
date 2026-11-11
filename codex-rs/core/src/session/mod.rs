@@ -246,6 +246,7 @@ use codex_protocol::exec_output::StreamOutput;
 pub(crate) mod async_compaction;
 mod code_mode_warning;
 mod config_refresh;
+pub(crate) mod context_pause;
 pub(crate) mod context_window;
 mod daemon_recovery;
 mod environment;
@@ -379,7 +380,9 @@ use codex_protocol::openai_models::ReasoningEffort as ReasoningEffortConfig;
 use codex_protocol::protocol::ApplyPatchApprovalRequestEvent;
 use codex_protocol::protocol::AskForApproval;
 use codex_protocol::protocol::CodexErrorInfo;
+use codex_protocol::protocol::ContextWindowUsage;
 use codex_protocol::protocol::DeprecationNoticeEvent;
+use codex_protocol::protocol::ErrorEvent;
 use codex_protocol::protocol::Event;
 use codex_protocol::protocol::EventMsg;
 use codex_protocol::protocol::ExecApprovalRequestEvent;
@@ -1591,6 +1594,11 @@ impl Session {
         state.get_total_token_usage()
     }
 
+    pub(crate) async fn get_reported_token_usage(&self) -> i64 {
+        let state = self.state.lock().await;
+        state.get_reported_token_usage()
+    }
+
     pub(crate) async fn auto_compact_window_snapshot(&self) -> AutoCompactWindowSnapshot {
         let state = self.state.lock().await;
         state.auto_compact_window_snapshot()
@@ -1710,6 +1718,8 @@ impl Session {
             InitialHistory::Resumed(resumed_history) => {
                 let turn_context = self.new_default_turn().await;
                 let rollout_items = resumed_history.history;
+                self.state.lock().await.context_pause =
+                    context_pause::ContextPauseState::restore(self.thread_id(), &rollout_items);
                 if matches!(
                     rollout_items.iter().rev().find_map(|item| match item {
                         RolloutItem::EventMsg(event) => agent_status_from_event(event),
@@ -2551,7 +2561,7 @@ impl Session {
                 .record_item_started(item_id.to_owned(), started_at_ms)
                 .await;
         }
-        let legacy_source = msg.clone();
+        let mut legacy_source = msg.clone();
         if let EventMsg::Error(error) = &legacy_source
             && error
                 .codex_error_info
@@ -2592,7 +2602,22 @@ impl Session {
                 .analytics_events_client
                 .track_guardian_session_event(self.thread_id, &event);
         }
-        self.send_event_raw(event).await;
+        if let Some(error) = self
+            .send_event_raw_with_persistence(event, /*persist*/ true)
+            .await
+        {
+            // An unsaved pause did not take effect.
+            self.state.lock().await.context_pause = Default::default();
+            turn_context
+                .terminal_error
+                .lock()
+                .await
+                .replace(error.clone());
+            if let EventMsg::TurnComplete(completed) = &mut legacy_source {
+                completed.context_pause = None;
+                completed.error = Some(error);
+            }
+        }
         self.maybe_notify_parent_of_terminal_turn(turn_context, &legacy_source)
             .await;
         self.maybe_mirror_event_text_to_realtime(&legacy_source)
@@ -2745,7 +2770,8 @@ impl Session {
     }
 
     pub(crate) async fn send_event_raw(&self, event: Event) {
-        self.send_event_raw_with_persistence(event, /*persist*/ true)
+        let _ = self
+            .send_event_raw_with_persistence(event, /*persist*/ true)
             .await;
     }
 
@@ -2759,10 +2785,15 @@ impl Session {
                 true
             }
         };
-        self.send_event_raw_with_persistence(event, persist).await;
+        let _ = self.send_event_raw_with_persistence(event, persist).await;
     }
 
-    async fn send_event_raw_with_persistence(&self, event: Event, persist: bool) {
+    /// Returns the error delivered in place of a context pause that could not be saved.
+    async fn send_event_raw_with_persistence(
+        &self,
+        mut event: Event,
+        persist: bool,
+    ) -> Option<ErrorEvent> {
         let flush_guardian_completion = persist
             && matches!(event.msg, EventMsg::TurnComplete(_))
             && self.is_private_guardian_reviewer().await;
@@ -2793,7 +2824,22 @@ impl Session {
             warn!("failed to persist realtime history: {error}");
         }
         // Persist the event into rollout storage; the store applies its persistence policy.
-        if persist {
+        let mut persistence_error = None;
+        if persist
+            && matches!(&event.msg, EventMsg::TurnComplete(done) if done.context_pause.is_some())
+        {
+            if let Err(error) = context_pause::persist_completion(self, &event.msg).await {
+                let error =
+                    CodexErr::Fatal(format!("Could not persist the context pause: {error}"))
+                        .to_error_event(/*message_prefix*/ None);
+                error!("{}", error.message);
+                if let EventMsg::TurnComplete(completed) = &mut event.msg {
+                    completed.context_pause = None;
+                    completed.error = Some(error.clone());
+                }
+                persistence_error = Some(error);
+            }
+        } else if persist {
             let rollout_items = vec![RolloutItem::EventMsg(event.msg.clone())];
             self.persist_rollout_items(&rollout_items).await;
         }
@@ -2811,6 +2857,7 @@ impl Session {
             warn!("failed to flush completed Guardian review: {err}");
         }
         self.deliver_event_raw(event).await;
+        persistence_error
     }
 
     async fn deliver_event_raw(&self, event: Event) {
@@ -4644,6 +4691,7 @@ impl Session {
                 compaction_response_id: metadata.compaction_response_id,
                 latest_token_usage_record: state.latest_token_usage_record.clone(),
                 resume_metadata: Some(CompactionResumeMetadata {
+                    context_pause: state.context_pause.checkpoint(self.thread_id()),
                     dynamic_tools: Some(Box::new(DynamicToolsSnapshot {
                         thread_id: self.thread_id(),
                         tools: state.persisted_dynamic_tools.to_vec(),
@@ -5413,6 +5461,7 @@ impl Session {
                     }
                     TokenUsageContext::SpendingOnly => {
                         let mut info = state.token_info().unwrap_or(TokenUsageInfo {
+                            context_window_usage: None,
                             total_token_usage: TokenUsage::default(),
                             last_usage_includes_reasoning: None,
                             last_token_usage: TokenUsage::default(),
@@ -5471,6 +5520,7 @@ impl Session {
         {
             let mut state = self.state.lock().await;
             let mut info = state.token_info().unwrap_or(TokenUsageInfo {
+                context_window_usage: None,
                 total_token_usage: TokenUsage::default(),
                 last_usage_includes_reasoning: None,
                 last_token_usage: TokenUsage::default(),
@@ -5535,20 +5585,63 @@ impl Session {
     }
 
     pub(crate) async fn send_token_count_event(&self, turn_context: &TurnContext) {
+        self.send_context_token_count(turn_context, /*measured_usage*/ None)
+            .await;
+    }
+
+    pub(super) async fn send_context_token_count(
+        &self,
+        turn_context: &TurnContext,
+        measured_usage: Option<ContextWindowUsage>,
+    ) {
+        let automatic_compaction = context_window::automatic_compaction_enabled(self, turn_context);
         let (info, rate_limits) = {
-            let state = self.state.lock().await;
-            state.token_info_and_rate_limits()
+            let mut state = self.state.lock().await;
+            let (mut info, rate_limits) = state.token_info_and_rate_limits();
+            if let Some(usage) = &measured_usage {
+                info.get_or_insert_with(|| TokenUsageInfo {
+                    context_window_usage: None,
+                    total_token_usage: TokenUsage::default(),
+                    last_usage_includes_reasoning: None,
+                    last_token_usage: TokenUsage::default(),
+                    model_context_window: Some(usage.context_window),
+                });
+            }
+            if let Some(info) = &mut info {
+                info.context_window_usage = if automatic_compaction {
+                    None
+                } else {
+                    measured_usage.or_else(|| {
+                        turn_context.model_context_window().map(|context_window| {
+                            ContextWindowUsage {
+                                used_tokens: state.get_reported_token_usage(),
+                                context_window,
+                            }
+                        })
+                    })
+                };
+                state.set_token_info(Some(info.clone()));
+            }
+            (info, rate_limits)
         };
         let event = EventMsg::TokenCount(TokenCountEvent { info, rate_limits });
         self.send_event(turn_context, event).await;
     }
 
     pub(crate) async fn set_total_tokens_full(&self, turn_context: &TurnContext) {
-        if let Some(context_window) = turn_context.model_context_window() {
+        let context_window = turn_context.model_context_window();
+        if let Some(context_window) = context_window {
             let mut state = self.state.lock().await;
             state.set_token_usage_full(context_window);
         }
-        self.send_token_count_event(turn_context).await;
+        self.send_context_token_count(
+            turn_context,
+            context_window.map(|context_window| ContextWindowUsage {
+                used_tokens: context_window,
+                context_window,
+            }),
+        )
+        .await;
     }
 
     pub(crate) async fn record_response_item_and_emit_turn_item(

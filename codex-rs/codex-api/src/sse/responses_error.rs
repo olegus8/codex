@@ -90,6 +90,17 @@ pub(super) fn parse_failed_response(response: Option<Value>) -> ApiError {
         Some("server_is_overloaded") => ApiError::ServerOverloaded {
             retry_after: retry_after_header,
         },
+        Some("server_error")
+            if response
+                .as_ref()
+                .and_then(|response| response.get("output"))
+                .is_none_or(|output| output.as_array().is_some_and(Vec::is_empty)) =>
+        {
+            ApiError::ServerErrorBeforeOutput {
+                message: error.message.unwrap_or_default(),
+                retry_after: retry_after_header,
+            }
+        }
         Some("rate_limit_exceeded" | "slow_down") => {
             let retry_after = retry_after_header
                 .or_else(|| try_parse_retry_delay(&error).and_then(RetryAfter::from_delay));

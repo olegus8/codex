@@ -170,6 +170,7 @@ pub(crate) async fn apply_bespoke_event_handling(
                 let state = thread_state.lock().await;
                 let turn = state.active_turn_metadata_snapshot().map(Turn::from);
                 turn.unwrap_or_else(|| Turn {
+                    context_pause: None,
                     id: payload.turn_id.clone(),
                     root_turn_id: payload.root_turn_id.clone(),
                     items: Vec::new(),
@@ -1220,6 +1221,7 @@ pub(crate) async fn apply_bespoke_event_handling(
                         started_at: aborted.started_at,
                         completed_at: aborted.completed_at,
                         duration_ms: aborted.duration_ms,
+                        context_pause: None,
                     },
                     &outgoing,
                 )
@@ -1391,6 +1393,7 @@ struct TurnCompletionMetadata {
     started_at: Option<i64>,
     completed_at: Option<i64>,
     duration_ms: Option<i64>,
+    context_pause: Option<codex_app_server_protocol::ContextPause>,
 }
 
 async fn emit_turn_completed_with_status(
@@ -1406,6 +1409,7 @@ async fn emit_turn_completed_with_status(
     let notification = TurnCompletedNotification {
         thread_id: conversation_id.to_string(),
         turn: Turn {
+            context_pause: turn_completion_metadata.context_pause,
             id: event_turn_id,
             root_turn_id: turn_completion_metadata.root_turn_id,
             items,
@@ -1596,6 +1600,7 @@ async fn handle_turn_complete(
             started_at: turn_summary.started_at,
             completed_at: turn_complete_event.completed_at,
             duration_ms: turn_complete_event.duration_ms,
+            context_pause: turn_complete_event.context_pause.map(Into::into),
         },
         outgoing,
     )
@@ -1627,6 +1632,7 @@ async fn handle_turn_interrupted(
             started_at: turn_summary.started_at,
             completed_at: turn_aborted_event.completed_at,
             duration_ms: turn_aborted_event.duration_ms,
+            context_pause: None,
         },
         outgoing,
     )
@@ -2281,6 +2287,7 @@ mod tests {
 
     fn turn_complete_event(turn_id: &str) -> TurnCompleteEvent {
         TurnCompleteEvent {
+            context_pause: None,
             root_turn_id: None,
             turn_id: turn_id.to_string(),
             started_at: None,
@@ -3755,6 +3762,7 @@ mod tests {
         );
 
         let info = TokenUsageInfo {
+            context_window_usage: None,
             total_token_usage: TokenUsage {
                 input_tokens: 100,
                 cached_input_tokens: 25,

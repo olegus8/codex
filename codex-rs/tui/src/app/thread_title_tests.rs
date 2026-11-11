@@ -293,6 +293,7 @@ async fn check_thread_title_generation(scenario: TitleScenario) -> color_eyre::R
         .await
         .turns
         .push(Turn {
+            context_pause: None,
             id: "existing-turn".to_string(),
             root_turn_id: None,
             items: vec![ThreadItem::untimed(title_user_message(

@@ -4,6 +4,8 @@ export type {
   TurnStartedEvent,
   TurnCompletedEvent,
   TurnFailedEvent,
+  ContextPause,
+  ContextWindowUsage,
   ItemStartedEvent,
   ItemUpdatedEvent,
   ItemCompletedEvent,

@@ -14,6 +14,13 @@ impl ChatWidget {
     /// Open a popup to choose a quick auto model. Selecting "All models"
     /// opens the full picker with every available preset.
     pub(crate) fn open_model_popup(&mut self) {
+        if !self.local_settings.model_switching_enabled {
+            self.add_info_message(
+                "This session keeps its selected model.".into(),
+                /*hint*/ None,
+            );
+            return;
+        }
         if !self.is_session_configured() {
             self.add_info_message(
                 "Model selection is disabled until startup completes.".to_string(),
@@ -80,6 +87,10 @@ impl ChatWidget {
     }
 
     pub(crate) fn open_model_popup_with_presets(&mut self, presets: Vec<ModelPreset>) {
+        if !self.local_settings.model_switching_enabled {
+            self.bottom_pane.dismiss_view_by_id(MODEL_SELECTION_VIEW_ID);
+            return;
+        }
         if self.restrict_model_picker_to_luna_reserve() {
             self.open_luna_reserve_model_popup(presets, MODEL_SELECTION_VIEW_ID);
             return;
@@ -211,6 +222,11 @@ impl ChatWidget {
     }
 
     pub(crate) fn open_all_models_popup(&mut self) {
+        if !self.local_settings.model_switching_enabled {
+            self.bottom_pane
+                .dismiss_view_by_id(ALL_MODELS_SELECTION_VIEW_ID);
+            return;
+        }
         if self.restrict_model_picker_to_luna_reserve() {
             self.open_luna_reserve_model_popup(
                 self.model_catalog.try_list_models().unwrap_or_default(),

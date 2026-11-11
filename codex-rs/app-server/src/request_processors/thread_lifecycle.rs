@@ -1235,6 +1235,7 @@ pub(super) async fn handle_pending_thread_resume_request(
 
     let response = ThreadResumeResponse {
         thread,
+        waiting_context_pause: waiting_context_pause(&conversation).await,
         disabled_plugin_ids,
         model,
         model_provider: model_provider_id,
@@ -1288,6 +1289,16 @@ pub(super) async fn handle_pending_thread_resume_request(
     conversation
         .emit_thread_idle_lifecycle_if_idle(ThreadIdleCause::Completed)
         .await;
+}
+
+pub(super) async fn waiting_context_pause(
+    thread: &CodexThread,
+) -> Option<codex_app_server_protocol::WaitingContextPause> {
+    thread.waiting_context_pause().await.map(|pause| {
+        codex_app_server_protocol::WaitingContextPause {
+            details: pause.details.map(Into::into),
+        }
+    })
 }
 
 pub(super) async fn send_thread_goal_snapshot_notification(

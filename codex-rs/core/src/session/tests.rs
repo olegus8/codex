@@ -3420,6 +3420,7 @@ async fn record_initial_history_seeds_token_info_from_rollout() {
     let (mut rollout_items, _expected) = sample_rollout(&session, &turn_context).await;
 
     let info1 = TokenUsageInfo {
+        context_window_usage: None,
         total_token_usage: TokenUsage {
             input_tokens: 10,
             cached_input_tokens: 0,
@@ -3442,6 +3443,7 @@ async fn record_initial_history_seeds_token_info_from_rollout() {
         model_context_window: Some(1_000),
     };
     let info2 = TokenUsageInfo {
+        context_window_usage: None,
         total_token_usage: TokenUsage {
             input_tokens: 100,
             cached_input_tokens: 50,
@@ -3600,6 +3602,7 @@ async fn recompute_token_usage_updates_model_context_window() {
     {
         let mut state = session.state.lock().await;
         state.set_token_info(Some(TokenUsageInfo {
+            context_window_usage: None,
             total_token_usage: TokenUsage::default(),
             last_usage_includes_reasoning: None,
             last_token_usage: TokenUsage::default(),
@@ -3725,6 +3728,7 @@ async fn record_token_usage_info_notifies_extension_contributors(
     let mut expected_total_usage = first_usage.clone();
     expected_total_usage.add_assign(&second_usage);
     let expected_session_info = TokenUsageInfo {
+        context_window_usage: None,
         total_token_usage: expected_total_usage.clone(),
         last_usage_includes_reasoning: Some(matches!(
             context,
@@ -3742,6 +3746,7 @@ async fn record_token_usage_info_notifies_extension_contributors(
             thread_level_id: session.thread_id.to_string(),
             turn_level_id: turn_context.sub_id.clone(),
             token_usage: TokenUsageInfo {
+                context_window_usage: None,
                 total_token_usage: first_usage.clone(),
                 last_usage_includes_reasoning: Some(true),
                 last_token_usage: first_usage,
@@ -3755,6 +3760,7 @@ async fn record_token_usage_info_notifies_extension_contributors(
             thread_level_id: session.thread_id.to_string(),
             turn_level_id: turn_context.sub_id.clone(),
             token_usage: TokenUsageInfo {
+                context_window_usage: None,
                 total_token_usage: expected_total_usage,
                 last_usage_includes_reasoning: match context {
                     crate::session::TokenUsageContext::Sampling {
@@ -4574,6 +4580,7 @@ async fn record_initial_history_forked_hydrates_previous_turn_settings() {
         RolloutItem::TurnContext(previous_context_item.clone()),
         RolloutItem::EventMsg(EventMsg::TurnComplete(
             codex_protocol::protocol::TurnCompleteEvent {
+                context_pause: None,
                 root_turn_id: None,
                 turn_id,
                 last_agent_message: None,
@@ -5116,7 +5123,7 @@ async fn open_thread_persistence(session: &mut Session) -> PathBuf {
         .expect("thread should have rollout path")
 }
 
-async fn attach_thread_persistence(session: &mut Session) -> PathBuf {
+pub(super) async fn attach_thread_persistence(session: &mut Session) -> PathBuf {
     let rollout_path = open_thread_persistence(session).await;
     session
         .ensure_rollout_materialized(PersistContext::Standard)
@@ -6357,10 +6364,30 @@ async fn standalone_settings_invalidate_continuation_before_delivering_acceptanc
 }
 
 #[tokio::test]
-async fn compaction_persists_resume_metadata_and_companion_records() {
+async fn a_compaction_carries_the_pause_into_a_bounded_resume() {
     let (mut session, turn_context) = make_session_and_context().await;
     let rollout_path = attach_thread_persistence(&mut session).await;
     let turn_context = Arc::new(turn_context);
+    let pause = codex_protocol::protocol::ContextPause {
+        thread_id: session.thread_id(),
+        used_tokens: 140_000,
+        context_window: 190_000,
+        threshold_percent: 70,
+        resumed_by_user: false,
+    };
+    let pause_event = RolloutItem::EventMsg(EventMsg::TurnComplete(TurnCompleteEvent {
+        context_pause: Some(pause.clone()),
+        root_turn_id: None,
+        turn_id: turn_context.sub_id.clone(),
+        last_agent_message: None,
+        error: None,
+        started_at: None,
+        completed_at: None,
+        duration_ms: None,
+        time_to_first_token_ms: None,
+    }));
+    session.state.lock().await.context_pause =
+        context_pause::ContextPauseState::restore(session.thread_id(), &[pause_event]);
     turn_context
         .turn_metadata_state
         .set_turn_trigger("automation".to_string());
@@ -6387,6 +6414,11 @@ async fn compaction_persists_resume_metadata_and_companion_records() {
 
     session.multi_agent_version = std::sync::OnceLock::from(MultiAgentVersion::V2);
     let expected = CompactionResumeMetadata {
+        context_pause: Some(codex_history::CompactionContextPause {
+            thread_id: session.thread_id(),
+            waiting_for_user: true,
+            details: Some(pause),
+        }),
         dynamic_tools: Some(Box::new(DynamicToolsSnapshot {
             thread_id: session.thread_id(),
             tools: Vec::new(),
@@ -6478,6 +6510,11 @@ async fn compaction_persists_resume_metadata_and_companion_records() {
     assert_eq!(compacted.replacement_history, Some(live_history));
     assert_eq!(compacted.resume_metadata.as_ref(), Some(&expected));
     assert_eq!(
+        context_pause::ContextPauseState::restore(ThreadId::new(), &compaction_items)
+            .checkpoint(session.thread_id()),
+        None,
+    );
+    assert_eq!(
         saved_world_state,
         &WorldStateItem::full(world_state.render_full().0.into_object())
     );
@@ -6512,6 +6549,7 @@ async fn compaction_persists_resume_metadata_and_companion_records() {
         if let Some(turn_id) = last_started_turn_id {
             items.push(RolloutItem::EventMsg(EventMsg::TurnComplete(
                 TurnCompleteEvent {
+                    context_pause: None,
                     root_turn_id: None,
                     turn_id,
                     last_agent_message: None,
@@ -6536,6 +6574,25 @@ async fn compaction_persists_resume_metadata_and_companion_records() {
             .await;
         assert_eq!(rolled_back.turn_attribution, None);
     }
+
+    session.state.lock().await.context_pause = Default::default();
+    session
+        .record_initial_history(InitialHistory::Resumed(ResumedHistory {
+            conversation_id: session.thread_id(),
+            history: Arc::new(compaction_items),
+            history_revision: None,
+            rollout_path: None,
+        }))
+        .await;
+    assert_eq!(
+        session
+            .state
+            .lock()
+            .await
+            .context_pause
+            .checkpoint(session.thread_id()),
+        expected.context_pause,
+    );
 }
 
 #[tokio::test]
@@ -13026,6 +13083,7 @@ async fn abort_empty_active_turn_preserves_pending_input() {
 async fn set_total_token_usage(sess: &Session, total_token_usage: TokenUsage) {
     let mut state = sess.state.lock().await;
     state.set_token_info(Some(TokenUsageInfo {
+        context_window_usage: None,
         total_token_usage,
         last_usage_includes_reasoning: None,
         last_token_usage: TokenUsage::default(),

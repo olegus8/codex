@@ -106,6 +106,7 @@ impl ChatWidget {
     /// avoid triggering side effects. Event ids are passed as `None` to
     /// distinguish replayed events from live ones.
     pub(crate) fn replay_thread_turns(&mut self, turns: Vec<Turn>, replay_kind: ReplayKind) {
+        let context_input_required = self.input_queue.context_input_required;
         if !turns.is_empty() || matches!(replay_kind, ReplayKind::ThreadSnapshot) {
             self.bottom_pane.dismiss_composer_sparkle();
         }
@@ -120,8 +121,7 @@ impl ChatWidget {
             .collect::<Vec<_>>();
         for (turn, hidden_nested_review_turn) in turns.into_iter().zip(hidden_nested_review_turns) {
             self.restore_realtime_transcripts_before_turn(&turn.id);
-            // Defer completed metadata-only turns until their page loads. Active
-            // turns must restore their lifecycle even before any items are available.
+            // Defer completed metadata-only turns until their items load.
             if turn.status == TurnStatus::Completed
                 && turn.items_view == codex_app_server_protocol::TurnItemsView::NotLoaded
                 && turn.items.is_empty()
@@ -230,6 +230,7 @@ impl ChatWidget {
                     TurnCompletedNotification {
                         thread_id: self.thread_id.map(|id| id.to_string()).unwrap_or_default(),
                         turn: Turn {
+                            context_pause: None,
                             id: turn_id,
                             root_turn_id,
                             items_view: codex_app_server_protocol::TurnItemsView::NotLoaded,
@@ -245,6 +246,7 @@ impl ChatWidget {
                 );
             }
         }
+        self.input_queue.context_input_required = context_input_required;
     }
 
     pub(crate) fn replay_thread_item(

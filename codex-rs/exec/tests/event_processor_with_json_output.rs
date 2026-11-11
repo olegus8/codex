@@ -145,6 +145,7 @@ fn turn_started_emits_turn_started_event() {
         processor.collect_thread_events(ServerNotification::TurnStarted(TurnStartedNotification {
             thread_id: "thread-1".to_string(),
             turn: Turn {
+                context_pause: None,
                 id: "turn-1".to_string(),
                 root_turn_id: None,
                 items_view: codex_app_server_protocol::TurnItemsView::Full,
@@ -1220,6 +1221,7 @@ fn plan_update_emits_started_then_updated_then_completed() {
         TurnCompletedNotification {
             thread_id: "thread-1".to_string(),
             turn: Turn {
+                context_pause: None,
                 id: "turn-1".to_string(),
                 root_turn_id: None,
                 items_view: codex_app_server_protocol::TurnItemsView::Full,
@@ -1254,6 +1256,7 @@ fn plan_update_emits_started_then_updated_then_completed() {
                     },
                 }),
                 ThreadEvent::TurnCompleted(TurnCompletedEvent {
+                    context_pause: None,
                     usage: Usage::default(),
                 }),
             ],
@@ -1281,6 +1284,7 @@ fn plan_update_after_completion_starts_new_todo_list_with_new_id() {
         TurnCompletedNotification {
             thread_id: "thread-1".to_string(),
             turn: Turn {
+                context_pause: None,
                 id: "turn-1".to_string(),
                 root_turn_id: None,
                 items_view: codex_app_server_protocol::TurnItemsView::Full,
@@ -1335,6 +1339,7 @@ fn token_usage_update_is_emitted_on_turn_completion() {
                 thread_id: "thread-1".to_string(),
                 turn_id: "turn-1".to_string(),
                 token_usage: ThreadTokenUsage {
+                    context_window_usage: None,
                     total: TokenUsageBreakdown {
                         total_tokens: 42,
                         input_tokens: 10,
@@ -1367,6 +1372,7 @@ fn token_usage_update_is_emitted_on_turn_completion() {
         TurnCompletedNotification {
             thread_id: "thread-1".to_string(),
             turn: Turn {
+                context_pause: None,
                 id: "turn-1".to_string(),
                 root_turn_id: None,
                 items_view: codex_app_server_protocol::TurnItemsView::Full,
@@ -1383,7 +1389,9 @@ fn token_usage_update_is_emitted_on_turn_completion() {
         completed,
         CollectedThreadEvents {
             events: vec![ThreadEvent::TurnCompleted(TurnCompletedEvent {
+                context_pause: None,
                 usage: Usage {
+                    context_window_usage: None,
                     input_tokens: 10,
                     cached_input_tokens: 3,
                     cache_write_input_tokens: 4,
@@ -1404,6 +1412,7 @@ fn turn_completion_recovers_final_message_from_turn_items() {
         TurnCompletedNotification {
             thread_id: "thread-1".to_string(),
             turn: Turn {
+                context_pause: None,
                 id: "turn-1".to_string(),
                 root_turn_id: None,
                 items_view: codex_app_server_protocol::TurnItemsView::Full,
@@ -1428,6 +1437,7 @@ fn turn_completion_recovers_final_message_from_turn_items() {
         completed,
         CollectedThreadEvents {
             events: vec![ThreadEvent::TurnCompleted(TurnCompletedEvent {
+                context_pause: None,
                 usage: Usage::default(),
             })],
             status: CodexStatus::InitiateShutdown,
@@ -1485,6 +1495,7 @@ fn turn_completion_reconciles_started_items_from_turn_items() {
         TurnCompletedNotification {
             thread_id: "thread-1".to_string(),
             turn: Turn {
+                context_pause: None,
                 id: "turn-1".to_string(),
                 root_turn_id: None,
                 items_view: codex_app_server_protocol::TurnItemsView::Full,
@@ -1529,6 +1540,7 @@ fn turn_completion_reconciles_started_items_from_turn_items() {
                     },
                 }),
                 ThreadEvent::TurnCompleted(TurnCompletedEvent {
+                    context_pause: None,
                     usage: Usage::default(),
                 }),
             ],
@@ -1561,6 +1573,7 @@ fn turn_completion_overwrites_stale_final_message_from_turn_items() {
         TurnCompletedNotification {
             thread_id: "thread-1".to_string(),
             turn: Turn {
+                context_pause: None,
                 id: "turn-1".to_string(),
                 root_turn_id: None,
                 items_view: codex_app_server_protocol::TurnItemsView::Full,
@@ -1585,6 +1598,7 @@ fn turn_completion_overwrites_stale_final_message_from_turn_items() {
         completed,
         CollectedThreadEvents {
             events: vec![ThreadEvent::TurnCompleted(TurnCompletedEvent {
+                context_pause: None,
                 usage: Usage::default(),
             })],
             status: CodexStatus::InitiateShutdown,
@@ -1617,6 +1631,7 @@ fn turn_completion_preserves_streamed_final_message_when_turn_items_are_empty() 
         TurnCompletedNotification {
             thread_id: "thread-1".to_string(),
             turn: Turn {
+                context_pause: None,
                 id: "turn-1".to_string(),
                 root_turn_id: None,
                 items_view: codex_app_server_protocol::TurnItemsView::Full,
@@ -1634,6 +1649,7 @@ fn turn_completion_preserves_streamed_final_message_when_turn_items_are_empty() 
         completed,
         CollectedThreadEvents {
             events: vec![ThreadEvent::TurnCompleted(TurnCompletedEvent {
+                context_pause: None,
                 usage: Usage::default(),
             })],
             status: CodexStatus::InitiateShutdown,
@@ -1670,6 +1686,7 @@ fn failed_turn_clears_stale_final_message() {
         TurnCompletedNotification {
             thread_id: "thread-1".to_string(),
             turn: Turn {
+                context_pause: None,
                 id: "turn-1".to_string(),
                 root_turn_id: None,
                 items_view: codex_app_server_protocol::TurnItemsView::Full,
@@ -1700,6 +1717,7 @@ fn turn_completion_falls_back_to_final_plan_text() {
         TurnCompletedNotification {
             thread_id: "thread-1".to_string(),
             turn: Turn {
+                context_pause: None,
                 id: "turn-1".to_string(),
                 root_turn_id: None,
                 items_view: codex_app_server_protocol::TurnItemsView::Full,
@@ -1720,6 +1738,7 @@ fn turn_completion_falls_back_to_final_plan_text() {
         completed,
         CollectedThreadEvents {
             events: vec![ThreadEvent::TurnCompleted(TurnCompletedEvent {
+                context_pause: None,
                 usage: Usage::default(),
             })],
             status: CodexStatus::InitiateShutdown,
@@ -1757,6 +1776,7 @@ fn turn_failure_prefers_structured_error_message() {
         TurnCompletedNotification {
             thread_id: "thread-1".to_string(),
             turn: Turn {
+                context_pause: None,
                 id: "turn-1".to_string(),
                 root_turn_id: None,
                 items_view: codex_app_server_protocol::TurnItemsView::Full,

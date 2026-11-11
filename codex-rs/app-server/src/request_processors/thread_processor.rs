@@ -14,6 +14,7 @@ use super::thread_fork_goal::inherit_thread_goal_snapshot;
 use super::thread_input::can_accept_direct_input;
 use super::thread_input::ensure_direct_input_allowed;
 use super::thread_lifecycle::thread_closing_for_resume;
+use super::thread_lifecycle::waiting_context_pause;
 use super::*;
 use crate::connection_rpc_gate::ConnectionRpcGate;
 use crate::error_code::method_not_found;
@@ -4534,6 +4535,7 @@ impl ThreadRequestProcessor {
                 let thread_originator = config_snapshot.originator.clone();
                 let response = ThreadResumeResponse {
                     thread,
+                    waiting_context_pause: waiting_context_pause(&codex_thread).await,
                     disabled_plugin_ids: config_snapshot.disabled_plugin_ids,
                     model: session_configured.model,
                     model_provider: session_configured.model_provider_id,
@@ -5897,6 +5899,7 @@ impl ThreadRequestProcessor {
         let thread_originator = config_snapshot.originator.clone();
         let response = ThreadForkResponse {
             thread: thread.clone(),
+            waiting_context_pause: waiting_context_pause(&forked_thread).await,
             disabled_plugin_ids: config_snapshot.disabled_plugin_ids,
             model: config_snapshot.model.clone(),
             model_provider: session_configured.model_provider_id,
@@ -6446,6 +6449,7 @@ fn stored_turn_to_api_turn(
         started_at: turn.started_at,
         completed_at: turn.completed_at,
         duration_ms: turn.duration_ms,
+        context_pause: turn.context_pause,
     })
 }
 

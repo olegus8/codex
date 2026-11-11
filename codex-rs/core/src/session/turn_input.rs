@@ -14,6 +14,7 @@
 
 use super::TurnInput;
 use super::UserInputMetadata;
+use super::context_pause;
 use super::inject::validate_injected_response_item;
 use super::session::Session;
 use super::session::SessionConfiguration;
@@ -384,6 +385,10 @@ async fn start_or_steer(
             ));
         }
     };
+    let answers_pause = matches!(&input, SubmittedTurnInput::UserInput { content, .. } if !content.is_empty())
+        && input_metadata.origin.is_user()
+        && start.parent_turn_id.is_none();
+    context_pause::require_user_input(session, answers_pause).await?;
     let settings = PreparedTurnInputSettings::prepare(
         session,
         WithTurnExtensionData {
@@ -403,6 +408,7 @@ async fn start_or_steer(
             settings.required_active_final_output_json_schema(),
             responsesapi_client_metadata.clone(),
             input_metadata,
+            answers_pause,
         )
         .await
     {
@@ -442,6 +448,7 @@ async fn start_or_steer(
             else {
                 unreachable!("explicit user input can enter Plan mode");
             };
+            context_pause::acknowledge_user_input(session, answers_pause).await;
             turn_context
                 .turn_metadata_state
                 .update_responsesapi_client_metadata(responsesapi_client_metadata);
@@ -485,6 +492,7 @@ async fn start_if_idle(
     kind: TurnStartKind,
     expected_previous_turn_id: Option<String>,
 ) -> CodexResult<TurnInputSubmission> {
+    context_pause::require_user_input(session, /*explicit_user*/ false).await?;
     let WithTurnExtensionData {
         request,
         turn_extension_init,
@@ -541,6 +549,7 @@ async fn start_if_idle(
                 reason: NotSubmittedReason::NotIdle,
             });
         }
+        context_pause::require_user_input(session, /*explicit_user*/ false).await?;
         if let Some(expected) = expected_previous_turn_id
             && session.state.lock().await.last_started_turn_id.as_ref() != Some(&expected)
         {
@@ -671,6 +680,10 @@ async fn steer(
             "only user input can steer a turn".to_string(),
         ));
     }
+    let answers_pause = matches!(&input, SubmittedTurnInput::UserInput { content, .. } if !content.is_empty())
+        && input_metadata.origin.is_user()
+        && start.parent_turn_id.is_none();
+    context_pause::require_user_input(session, answers_pause).await?;
     let settings = PreparedTurnInputSettings::prepare(
         session,
         WithTurnExtensionData {
@@ -689,6 +702,7 @@ async fn steer(
             settings.required_active_final_output_json_schema(),
             responsesapi_client_metadata,
             input_metadata,
+            answers_pause,
         )
         .await
     {
@@ -726,6 +740,9 @@ impl Session {
     ) -> Option<(Arc<tokio::sync::Mutex<TurnState>>, TurnStartOptions)> {
         let mut active_turn = self.active_turn.lock().await;
         if active_turn.is_some() {
+            return None;
+        }
+        if self.state.lock().await.context_pause.waiting_for_user {
             return None;
         }
         let has_trigger_turn = self.input_queue.has_trigger_turn_mailbox_items().await;
@@ -874,6 +891,7 @@ impl Session {
         required_final_output_json_schema: Option<&Value>,
         responsesapi_client_metadata: ResponsesApiClientMetadataUpdate,
         input_metadata: UserInputMetadata,
+        answers_pause: bool,
     ) -> Result<(String, String), NotSubmittedReason> {
         let mut active = self.active_turn.lock().await;
         let Some(active_turn) = active.as_mut() else {
@@ -955,6 +973,7 @@ impl Session {
                 pending_input,
             )
             .await;
+        context_pause::acknowledge_user_input(self, answers_pause).await;
         Ok((
             active_turn_id.clone(),
             active_task.turn_context.root_turn_id(),

@@ -1,3 +1,4 @@
+use codex_app_server_protocol::ContextPause;
 use codex_protocol::ThreadId;
 use codex_protocol::protocol::ThreadHistoryMode;
 use serde::Deserialize;
@@ -58,6 +59,7 @@ pub(super) struct StoredTurnRow {
     pub started_at: Option<i64>,
     pub completed_at: Option<i64>,
     pub duration_ms: Option<i64>,
+    pub context_pause: Option<ContextPause>,
     pub first_user_item_id: Option<String>,
     pub final_agent_item_id: Option<String>,
     pub summary_items: Vec<StoredThreadItem>,
@@ -150,6 +152,7 @@ pub(in crate::local) async fn list_turns(
             started_at: turn.started_at,
             completed_at: turn.completed_at,
             duration_ms: turn.duration_ms,
+            context_pause: turn.context_pause,
         });
     }
 
@@ -324,6 +327,12 @@ pub(super) fn stored_turn_row(row: sqlx::sqlite::SqliteRow) -> ThreadStoreResult
         .map(serde_json::from_str)
         .transpose()
         .map_err(super::thread_history_error)?;
+    let context_pause = row
+        .try_get::<Option<String>, _>("context_pause_json")?
+        .as_deref()
+        .map(serde_json::from_str)
+        .transpose()
+        .map_err(super::thread_history_error)?;
     Ok(StoredTurnRow {
         position: RolloutHistoryPosition {
             rollout_ordinal: row.try_get("rollout_ordinal")?,
@@ -335,6 +344,7 @@ pub(super) fn stored_turn_row(row: sqlx::sqlite::SqliteRow) -> ThreadStoreResult
         started_at: row.try_get("started_at")?,
         completed_at: row.try_get("completed_at")?,
         duration_ms: row.try_get("duration_ms")?,
+        context_pause,
         first_user_item_id: row.try_get("first_user_item_id")?,
         final_agent_item_id: row.try_get("final_agent_item_id")?,
         summary_items: Vec::new(),

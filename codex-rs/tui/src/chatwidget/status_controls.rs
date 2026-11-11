@@ -410,13 +410,20 @@ impl ChatWidget {
     pub(super) fn status_line_context_window_size(&self) -> Option<i64> {
         self.token_info
             .as_ref()
-            .and_then(|info| info.model_context_window)
+            .and_then(TokenUsageInfo::context_window_size)
             .or(self.config.model_context_window)
     }
 
     pub(super) fn status_line_context_remaining_percent(&self) -> Option<i64> {
         if self.token_usage_pending {
             return None;
+        }
+        if let Some(remaining) = self
+            .token_info
+            .as_ref()
+            .and_then(TokenUsageInfo::runtime_context_remaining_percent)
+        {
+            return Some(remaining);
         }
         let Some(context_window) = self.status_line_context_window_size() else {
             return Some(100);
