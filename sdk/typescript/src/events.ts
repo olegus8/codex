@@ -17,6 +17,17 @@ export type TurnStartedEvent = {
   type: "turn.started";
 };
 
+/** Runtime usage against the usable context limit. */
+export type ContextWindowUsage = {
+  used_tokens: number;
+  context_window: number;
+};
+
+/** The context threshold reached during this turn. */
+export type ContextPause = ContextWindowUsage & {
+  threshold_percent: number;
+};
+
 /** Describes the usage of tokens during a turn. */
 export type Usage = {
   /** The number of input tokens used during the turn. */
@@ -29,12 +40,14 @@ export type Usage = {
   output_tokens: number;
   /** The number of reasoning output tokens used during the turn. */
   reasoning_output_tokens: number;
+  context_window_usage?: ContextWindowUsage;
 };
 
 /** Emitted when a turn is completed. Typically right after the assistant's response. */
 export type TurnCompletedEvent = {
   type: "turn.completed";
   usage: Usage;
+  context_pause?: ContextPause;
 };
 
 /** Indicates that a turn failed with an error. */

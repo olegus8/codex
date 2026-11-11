@@ -3420,6 +3420,7 @@ async fn record_initial_history_seeds_token_info_from_rollout() {
     let (mut rollout_items, _expected) = sample_rollout(&session, &turn_context).await;
 
     let info1 = TokenUsageInfo {
+        context_window_usage: None,
         total_token_usage: TokenUsage {
             input_tokens: 10,
             cached_input_tokens: 0,
@@ -3442,6 +3443,7 @@ async fn record_initial_history_seeds_token_info_from_rollout() {
         model_context_window: Some(1_000),
     };
     let info2 = TokenUsageInfo {
+        context_window_usage: None,
         total_token_usage: TokenUsage {
             input_tokens: 100,
             cached_input_tokens: 50,
@@ -3600,6 +3602,7 @@ async fn recompute_token_usage_updates_model_context_window() {
     {
         let mut state = session.state.lock().await;
         state.set_token_info(Some(TokenUsageInfo {
+            context_window_usage: None,
             total_token_usage: TokenUsage::default(),
             last_usage_includes_reasoning: None,
             last_token_usage: TokenUsage::default(),
@@ -3725,6 +3728,7 @@ async fn record_token_usage_info_notifies_extension_contributors(
     let mut expected_total_usage = first_usage.clone();
     expected_total_usage.add_assign(&second_usage);
     let expected_session_info = TokenUsageInfo {
+        context_window_usage: None,
         total_token_usage: expected_total_usage.clone(),
         last_usage_includes_reasoning: Some(matches!(
             context,
@@ -3742,6 +3746,7 @@ async fn record_token_usage_info_notifies_extension_contributors(
             thread_level_id: session.thread_id.to_string(),
             turn_level_id: turn_context.sub_id.clone(),
             token_usage: TokenUsageInfo {
+                context_window_usage: None,
                 total_token_usage: first_usage.clone(),
                 last_usage_includes_reasoning: Some(true),
                 last_token_usage: first_usage,
@@ -3755,6 +3760,7 @@ async fn record_token_usage_info_notifies_extension_contributors(
             thread_level_id: session.thread_id.to_string(),
             turn_level_id: turn_context.sub_id.clone(),
             token_usage: TokenUsageInfo {
+                context_window_usage: None,
                 total_token_usage: expected_total_usage,
                 last_usage_includes_reasoning: match context {
                     crate::session::TokenUsageContext::Sampling {
@@ -12933,7 +12939,6 @@ async fn task_finish_emits_turn_item_lifecycle_for_leftover_pending_user_input()
     assert!(matches!(
         fifth.msg,
         EventMsg::TurnComplete(TurnCompleteEvent {
-            context_pause: None,
             turn_id,
             last_agent_message: None,
             error: None,
@@ -13077,6 +13082,7 @@ async fn abort_empty_active_turn_preserves_pending_input() {
 async fn set_total_token_usage(sess: &Session, total_token_usage: TokenUsage) {
     let mut state = sess.state.lock().await;
     state.set_token_info(Some(TokenUsageInfo {
+        context_window_usage: None,
         total_token_usage,
         last_usage_includes_reasoning: None,
         last_token_usage: TokenUsage::default(),

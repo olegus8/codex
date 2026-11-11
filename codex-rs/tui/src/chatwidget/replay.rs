@@ -120,9 +120,20 @@ impl ChatWidget {
             .collect::<Vec<_>>();
         for (turn, hidden_nested_review_turn) in turns.into_iter().zip(hidden_nested_review_turns) {
             self.restore_realtime_transcripts_before_turn(&turn.id);
+            if !hidden_nested_review_turn
+                && !turn
+                    .item_payloads()
+                    .any(|item| matches!(item, ThreadItemPayload::EnteredReviewMode { .. }))
+                && turn
+                    .item_payloads()
+                    .any(|item| matches!(item, ThreadItemPayload::UserMessage { .. }))
+            {
+                self.input_queue.context_input_required = false;
+            }
             // Defer completed metadata-only turns until their page loads. Active
-            // turns must restore their lifecycle even before any items are available.
+            // turns and context pauses restore state even without items.
             if turn.status == TurnStatus::Completed
+                && turn.context_pause.is_none()
                 && turn.items_view == codex_app_server_protocol::TurnItemsView::NotLoaded
                 && turn.items.is_empty()
             {
@@ -137,6 +148,7 @@ impl ChatWidget {
                 started_at,
                 completed_at,
                 duration_ms,
+                context_pause,
                 ..
             } = turn;
             let delegated = items.iter().any(|item| {
@@ -230,7 +242,7 @@ impl ChatWidget {
                     TurnCompletedNotification {
                         thread_id: self.thread_id.map(|id| id.to_string()).unwrap_or_default(),
                         turn: Turn {
-                            context_pause: None,
+                            context_pause,
                             id: turn_id,
                             root_turn_id,
                             items_view: codex_app_server_protocol::TurnItemsView::NotLoaded,

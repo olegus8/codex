@@ -138,7 +138,8 @@ SELECT rollout_end_ordinal AS rollout_ordinal, 3 AS kind, turn_id AS id, turn_id
        json_object('type', 'turnCompleted', 'position', rollout_end_ordinal,
                    'turnId', turn_id, 'status', status, 'error', json(error_json),
                    'startedAt', started_at, 'completedAt', completed_at,
-                   'durationMs', duration_ms) AS item_json
+                   'durationMs', duration_ms,
+                   'contextPause', json(context_pause_json)) AS item_json
 FROM thread_turns
 WHERE thread_id = ?1 AND rollout_end_ordinal >= ?2
   AND rollout_end_ordinal < ?3 AND rollout_end_ordinal <= ?4

@@ -6,6 +6,7 @@ mod approval_policy;
 mod auth_env;
 #[path = "completion_backfill_tests.rs"]
 mod completion_backfill;
+mod context_policy;
 #[path = "cyber_access_program_tests.rs"]
 mod cyber_access_program;
 mod daybreak;

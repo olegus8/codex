@@ -125,6 +125,12 @@ impl EventProcessorWithJsonOutput {
             cache_write_input_tokens: usage.total.cache_write_input_tokens,
             output_tokens: usage.total.output_tokens,
             reasoning_output_tokens: usage.total.reasoning_output_tokens,
+            context_window_usage: usage.context_window_usage.as_ref().map(|context| {
+                crate::exec_events::ContextWindowUsage {
+                    used_tokens: context.used_tokens,
+                    context_window: context.context_window,
+                }
+            }),
         }
     }
 
@@ -533,6 +539,7 @@ impl EventProcessorWithJsonOutput {
                         }
                         self.emit_final_message_on_shutdown = true;
                         events.push(ThreadEvent::TurnCompleted(TurnCompletedEvent {
+                            context_pause: notification.turn.context_pause.map(Into::into),
                             usage: self.usage_from_last_total(),
                         }));
                         CodexStatus::InitiateShutdown

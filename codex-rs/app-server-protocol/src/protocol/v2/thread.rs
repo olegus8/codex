@@ -1,6 +1,8 @@
 use super::ActivePermissionProfile;
 use super::ApprovalsReviewer;
 use super::AskForApproval;
+use super::ContextPause;
+use super::ContextWindowUsage;
 use super::SandboxMode;
 use super::SandboxPolicy;
 use super::Thread;
@@ -1986,6 +1988,9 @@ pub enum ThreadTimelineEntry {
         completed_at: Option<i64>,
         #[ts(rename = "durationMs", type = "number | null")]
         duration_ms: Option<i64>,
+        #[serde(default)]
+        #[ts(rename = "contextPause")]
+        context_pause: Option<ContextPause>,
     },
 }
 
@@ -2048,6 +2053,9 @@ pub struct ThreadTokenUsage {
     // TODO(aibrahim): make this not optional
     #[ts(type = "number | null")]
     pub model_context_window: Option<i64>,
+    /// Runtime usage against the usable limit when automatic compaction is disabled.
+    #[serde(default)]
+    pub context_window_usage: Option<ContextWindowUsage>,
 }
 
 impl From<CoreTokenUsageInfo> for ThreadTokenUsage {
@@ -2056,6 +2064,7 @@ impl From<CoreTokenUsageInfo> for ThreadTokenUsage {
             total: value.total_token_usage.into(),
             last: value.last_token_usage.into(),
             model_context_window: value.model_context_window,
+            context_window_usage: value.context_window_usage.map(Into::into),
         }
     }
 }

@@ -55,9 +55,33 @@ impl TokenUsage {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct TokenUsageInfo {
+    #[serde(default)]
+    pub(crate) context_window_usage: Option<codex_app_server_protocol::ContextWindowUsage>,
     pub(crate) total_token_usage: TokenUsage,
     pub(crate) last_token_usage: TokenUsage,
     pub(crate) model_context_window: Option<i64>,
+}
+
+impl TokenUsageInfo {
+    pub(crate) fn context_window_size(&self) -> Option<i64> {
+        self.context_window_usage
+            .as_ref()
+            .map(|usage| usage.context_window)
+            .or(self.model_context_window)
+    }
+
+    pub(crate) fn runtime_context_remaining_percent(&self) -> Option<i64> {
+        let usage = self.context_window_usage.as_ref()?;
+        if usage.context_window <= 0 {
+            return Some(0);
+        }
+        let remaining = usage.context_window.saturating_sub(usage.used_tokens);
+        Some(
+            (100.0 * remaining as f64 / usage.context_window as f64)
+                .clamp(0.0, 100.0)
+                .round() as i64,
+        )
+    }
 }
 
 impl fmt::Display for TokenUsage {
