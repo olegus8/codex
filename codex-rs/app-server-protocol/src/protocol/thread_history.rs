@@ -2287,6 +2287,7 @@ mod tests {
                 review_output: None,
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 root_turn_id: None,
                 turn_id: "turn-1".into(),
                 started_at: None,
@@ -2350,6 +2351,7 @@ mod tests {
                 completed_at_ms: 0,
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 root_turn_id: None,
                 turn_id: "turn-1".into(),
                 started_at: None,
@@ -2544,6 +2546,7 @@ mod tests {
                 started_at_ms: 0,
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 root_turn_id: None,
                 turn_id: turn_id.to_string(),
                 started_at: None,
@@ -2601,6 +2604,7 @@ mod tests {
                 completed_at_ms: 1_000,
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 root_turn_id: None,
                 turn_id: turn_id.to_string(),
                 started_at: None,
@@ -2701,6 +2705,7 @@ mod tests {
                 completed_at_ms: 1_000,
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 root_turn_id: None,
                 turn_id: turn_id.to_string(),
                 started_at: None,
@@ -2821,6 +2826,7 @@ mod tests {
                 status: CoreExecCommandStatus::Completed,
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 root_turn_id: None,
                 turn_id: turn_id.to_string(),
                 started_at: None,
@@ -2928,6 +2934,7 @@ mod tests {
                 ..Default::default()
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 root_turn_id: None,
                 turn_id: turn_id.to_string(),
                 started_at: None,
@@ -3039,6 +3046,7 @@ mod tests {
                 generation_id: None,
             })),
             RolloutItem::EventMsg(EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 root_turn_id: None,
                 turn_id: "turn-image".into(),
                 started_at: None,
@@ -3438,6 +3446,7 @@ mod tests {
                 ..Default::default()
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 root_turn_id: None,
                 turn_id: "turn-a".into(),
                 started_at: None,
@@ -4116,6 +4125,7 @@ mod tests {
                 ..Default::default()
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 root_turn_id: None,
                 turn_id: "turn-a".into(),
                 started_at: None,
@@ -4186,6 +4196,7 @@ mod tests {
                 ..Default::default()
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 root_turn_id: None,
                 turn_id: "turn-a".into(),
                 started_at: None,
@@ -4232,6 +4243,7 @@ mod tests {
                 status: CoreExecCommandStatus::Completed,
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 root_turn_id: None,
                 turn_id: "turn-b".into(),
                 started_at: None,
@@ -4297,6 +4309,7 @@ mod tests {
                 ..Default::default()
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 root_turn_id: None,
                 turn_id: "turn-a".into(),
                 started_at: None,
@@ -4343,6 +4356,7 @@ mod tests {
                 status: CoreExecCommandStatus::Completed,
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 root_turn_id: None,
                 turn_id: "turn-b".into(),
                 started_at: None,
@@ -4466,6 +4480,7 @@ mod tests {
             Some(expected.clone())
         );
         builder.handle_event(&EventMsg::TurnComplete(TurnCompleteEvent {
+            context_pause: None,
             root_turn_id: None,
             turn_id: "turn-1".into(),
             started_at: Some(100),
@@ -4525,6 +4540,7 @@ mod tests {
         );
 
         builder.handle_event(&EventMsg::TurnComplete(TurnCompleteEvent {
+            context_pause: None,
             root_turn_id: None,
             turn_id: "turn-1".into(),
             started_at: Some(100),
@@ -4713,6 +4729,7 @@ mod tests {
                 ..Default::default()
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 root_turn_id: None,
                 turn_id: "turn-a".into(),
                 started_at: None,
@@ -4740,6 +4757,7 @@ mod tests {
                 ..Default::default()
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 root_turn_id: None,
                 turn_id: "turn-a".into(),
                 started_at: None,
@@ -4757,6 +4775,7 @@ mod tests {
                 questions: None,
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 root_turn_id: None,
                 turn_id: "turn-b".into(),
                 started_at: None,
@@ -4817,6 +4836,7 @@ mod tests {
                 ..Default::default()
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 root_turn_id: None,
                 turn_id: "turn-a".into(),
                 started_at: Some(10),
@@ -4909,6 +4929,7 @@ mod tests {
                 ..Default::default()
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 root_turn_id: None,
                 turn_id: "turn-a".into(),
                 started_at: None,
@@ -4992,6 +5013,7 @@ mod tests {
                 resume_metadata: None,
             })),
             RolloutItem::EventMsg(EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 root_turn_id: None,
                 turn_id: "turn-compact".into(),
                 started_at: None,
@@ -5268,6 +5290,7 @@ mod tests {
                 ..Default::default()
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 root_turn_id: None,
                 turn_id: "turn-a".into(),
                 started_at: None,
@@ -5341,6 +5364,7 @@ mod tests {
                 }),
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 root_turn_id: None,
                 turn_id: "turn-a".into(),
                 started_at: None,
@@ -5396,6 +5420,7 @@ mod tests {
                 ..Default::default()
             }),
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 root_turn_id: None,
                 turn_id: "turn-a".into(),
                 started_at: Some(10),
@@ -5471,6 +5496,7 @@ mod tests {
             })),
             RolloutItem::ResponseItem(hook_prompt.into()),
             RolloutItem::EventMsg(EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 root_turn_id: None,
                 turn_id: "turn-a".into(),
                 started_at: None,
@@ -5591,6 +5617,7 @@ mod tests {
                 })),
                 RolloutItem::EventMsg(spawn),
                 RolloutItem::EventMsg(EventMsg::TurnComplete(TurnCompleteEvent {
+                    context_pause: None,
                     root_turn_id: None,
                     turn_id: "turn-a".into(),
                     started_at: None,
@@ -5663,6 +5690,7 @@ mod tests {
                 .into(),
             ),
             RolloutItem::EventMsg(EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 root_turn_id: None,
                 turn_id: "turn-a".into(),
                 started_at: None,
@@ -5837,6 +5865,7 @@ mod tests {
         )));
         let complete_changes = builder.handle_rollout_item_with_changes(&RolloutItem::EventMsg(
             EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 root_turn_id: None,
                 turn_id: "turn-a".into(),
                 started_at: None,
@@ -5926,6 +5955,7 @@ mod tests {
                 collaboration_mode_kind: Default::default(),
             })),
             RolloutItem::EventMsg(EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 root_turn_id: None,
                 turn_id: "turn-a".into(),
                 started_at: None,

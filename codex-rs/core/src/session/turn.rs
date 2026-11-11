@@ -564,6 +564,21 @@ pub(crate) async fn run_turn(
                 .await?
             }
         };
+        if turn_context.config.model_context_pause_percent.is_some() {
+            let token_status =
+                super::context_window::context_window_token_status(&sess, &turn_context).await;
+            if super::context_pause::maybe_pause(&sess, &turn_context, &token_status).await {
+                finish_context_paused_turn(
+                    &sess,
+                    &step_context,
+                    stop_hook_active,
+                    Vec::new(),
+                    last_agent_message.clone(),
+                )
+                .await;
+                break;
+            }
+        }
         let sampling_request_result: CodexResult<_> = async {
             super::time_reminder::maybe_record_current_time_reminder(
                 sess.as_ref(),
@@ -658,6 +673,18 @@ pub(crate) async fn run_turn(
                 }
                 .instrument(trace_span!("run_turn.collect_post_sampling_state"))
                 .await;
+                if super::context_pause::maybe_pause(&sess, &turn_context, &token_status).await {
+                    last_agent_message = sampling_request_last_agent_message;
+                    finish_context_paused_turn(
+                        &sess,
+                        &step_context,
+                        stop_hook_active,
+                        notify_messages,
+                        last_agent_message.clone(),
+                    )
+                    .await;
+                    break;
+                }
                 let needs_follow_up = model_needs_follow_up || has_pending_input;
                 let token_limit_reached = token_status.token_limit_reached;
 
@@ -1514,6 +1541,38 @@ async fn run_pre_sampling_compact(
 
 /// Returns true only when both turns declare compaction compatibility hashes and they differ.
 /// A missing hash does not provide enough information to trigger compaction.
+async fn finish_context_paused_turn(
+    sess: &Arc<Session>,
+    step_context: &Arc<StepContext>,
+    stop_hook_active: bool,
+    notify_messages: Vec<String>,
+    last_agent_message: Option<String>,
+) {
+    let outcome = run_turn_stop_hooks(
+        sess,
+        step_context,
+        stop_hook_active,
+        last_agent_message.clone(),
+    )
+    .await;
+    if outcome.should_block {
+        sess.send_event(
+            &step_context.turn,
+            EventMsg::Warning(WarningEvent {
+                message: "Context paused; the Stop hook's continuation was not run.".to_string(),
+            }),
+        )
+        .await;
+    }
+    run_legacy_after_agent_hook(
+        sess,
+        &step_context.turn,
+        notify_messages,
+        last_agent_message,
+    )
+    .await;
+}
+
 fn comp_hash_changed(previous: Option<&str>, current: Option<&str>) -> bool {
     previous
         .zip(current)

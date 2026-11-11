@@ -246,6 +246,7 @@ use codex_protocol::exec_output::StreamOutput;
 pub(crate) mod async_compaction;
 mod code_mode_warning;
 mod config_refresh;
+pub(crate) mod context_pause;
 pub(crate) mod context_window;
 mod daemon_recovery;
 mod environment;
@@ -1710,6 +1711,8 @@ impl Session {
             InitialHistory::Resumed(resumed_history) => {
                 let turn_context = self.new_default_turn().await;
                 let rollout_items = resumed_history.history;
+                self.state.lock().await.context_pause =
+                    context_pause::ContextPauseState::restore(self.thread_id(), &rollout_items);
                 if matches!(
                     rollout_items.iter().rev().find_map(|item| match item {
                         RolloutItem::EventMsg(event) => agent_status_from_event(event),
@@ -2542,7 +2545,7 @@ impl Session {
     }
 
     /// Persist the event to rollout and send it to clients.
-    pub(crate) async fn send_event(&self, turn_context: &TurnContext, msg: EventMsg) {
+    pub(crate) async fn send_event(&self, turn_context: &TurnContext, mut msg: EventMsg) {
         if let Some((item_id, started_at_ms)) = msg.command_approval_start() {
             // The client can see the command before execution. Keep its first start
             // for the canonical lifecycle events that will be saved in history.
@@ -2550,6 +2553,19 @@ impl Session {
                 .turn_timing_state
                 .record_item_started(item_id.to_owned(), started_at_ms)
                 .await;
+        }
+        let persists_pause =
+            matches!(&msg, EventMsg::TurnComplete(event) if event.context_pause.is_some());
+        if persists_pause
+            && let Err(error) = context_pause::persist_completion(self, &msg).await
+            && let EventMsg::TurnComplete(event) = &mut msg
+        {
+            let error = CodexErr::Fatal(format!("Could not persist the context pause: {error}"))
+                .to_error_event(/*message_prefix*/ None);
+            error!("{}", error.message);
+            event.context_pause = None;
+            event.error = Some(error.clone());
+            turn_context.terminal_error.lock().await.replace(error);
         }
         let legacy_source = msg.clone();
         if let EventMsg::Error(error) = &legacy_source
@@ -2592,7 +2608,8 @@ impl Session {
                 .analytics_events_client
                 .track_guardian_session_event(self.thread_id, &event);
         }
-        self.send_event_raw(event).await;
+        self.send_event_raw_with_persistence(event, !persists_pause)
+            .await;
         self.maybe_notify_parent_of_terminal_turn(turn_context, &legacy_source)
             .await;
         self.maybe_mirror_event_text_to_realtime(&legacy_source)
@@ -4644,6 +4661,7 @@ impl Session {
                 compaction_response_id: metadata.compaction_response_id,
                 latest_token_usage_record: state.latest_token_usage_record.clone(),
                 resume_metadata: Some(CompactionResumeMetadata {
+                    context_pause: state.context_pause.checkpoint(self.thread_id()),
                     dynamic_tools: Some(Box::new(DynamicToolsSnapshot {
                         thread_id: self.thread_id(),
                         tools: state.persisted_dynamic_tools.to_vec(),

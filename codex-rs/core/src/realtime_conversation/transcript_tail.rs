@@ -72,6 +72,7 @@ pub(super) async fn record(session: &Session, text: String) -> std::io::Result<(
     events.extend(legacy);
     if recording_turn {
         events.push(EventMsg::TurnComplete(TurnCompleteEvent {
+            context_pause: None,
             turn_id: turn.sub_id.clone(),
             root_turn_id: Some(turn.sub_id.clone()),
             last_agent_message: None,

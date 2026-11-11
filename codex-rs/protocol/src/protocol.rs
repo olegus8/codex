@@ -2381,8 +2381,23 @@ pub struct SafetyBufferingEvent {
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]
 pub struct ContextCompactedEvent;
 
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
+pub struct ContextPause {
+    pub thread_id: ThreadId,
+    pub used_tokens: i64,
+    pub context_window: i64,
+    pub threshold_percent: u8,
+    /// A user message steered into the ending turn already answered the pause.
+    #[serde(default)]
+    pub resumed_by_user: bool,
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]
 pub struct TurnCompleteEvent {
+    /// The once-per-thread context threshold was reached on this turn.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub context_pause: Option<ContextPause>,
     /// Resolved causal root for this turn; absent on older or synthetic events.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]

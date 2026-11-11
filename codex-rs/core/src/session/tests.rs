@@ -4574,6 +4574,7 @@ async fn record_initial_history_forked_hydrates_previous_turn_settings() {
         RolloutItem::TurnContext(previous_context_item.clone()),
         RolloutItem::EventMsg(EventMsg::TurnComplete(
             codex_protocol::protocol::TurnCompleteEvent {
+                context_pause: None,
                 root_turn_id: None,
                 turn_id,
                 last_agent_message: None,
@@ -6387,6 +6388,7 @@ async fn compaction_persists_resume_metadata_and_companion_records() {
 
     session.multi_agent_version = std::sync::OnceLock::from(MultiAgentVersion::V2);
     let expected = CompactionResumeMetadata {
+        context_pause: None,
         dynamic_tools: Some(Box::new(DynamicToolsSnapshot {
             thread_id: session.thread_id(),
             tools: Vec::new(),
@@ -6512,6 +6514,7 @@ async fn compaction_persists_resume_metadata_and_companion_records() {
         if let Some(turn_id) = last_started_turn_id {
             items.push(RolloutItem::EventMsg(EventMsg::TurnComplete(
                 TurnCompleteEvent {
+                    context_pause: None,
                     root_turn_id: None,
                     turn_id,
                     last_agent_message: None,
@@ -12883,6 +12886,7 @@ async fn task_finish_emits_turn_item_lifecycle_for_leftover_pending_user_input()
     assert!(matches!(
         fifth.msg,
         EventMsg::TurnComplete(TurnCompleteEvent {
+            context_pause: None,
             turn_id,
             last_agent_message: None,
             error: None,

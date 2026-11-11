@@ -37,6 +37,7 @@ fn projects_turn_lifecycle_without_prior_builder_state() {
     )));
     let completed = project(RolloutItem::EventMsg(EventMsg::TurnComplete(
         TurnCompleteEvent {
+            context_pause: None,
             root_turn_id: Some("root-turn".into()),
             turn_id: "turn-1".to_string(),
             last_agent_message: None,
@@ -83,6 +84,7 @@ fn projects_failed_turn_completion_as_snapshot() {
 
     let changes = project(RolloutItem::EventMsg(EventMsg::TurnComplete(
         TurnCompleteEvent {
+            context_pause: None,
             root_turn_id: None,
             turn_id: "turn-1".to_string(),
             last_agent_message: None,

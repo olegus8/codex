@@ -1571,6 +1571,7 @@ async fn thread_fork_creates_reference_backed_paginated_thread() -> Result<()> {
             collaboration_mode_kind: Default::default(),
         })),
         RolloutItem::EventMsg(EventMsg::TurnComplete(TurnCompleteEvent {
+            context_pause: None,
             root_turn_id: None,
             turn_id: "turn-1".to_string(),
             last_agent_message: None,
@@ -2038,6 +2039,7 @@ async fn thread_fork_freezes_active_paginated_turn_as_interrupted(
     append_rollout_item_to_path(
         source_path.as_path(),
         &RolloutItem::EventMsg(EventMsg::TurnComplete(TurnCompleteEvent {
+            context_pause: None,
             root_turn_id: None,
             turn_id: "active-turn".to_string(),
             last_agent_message: None,
