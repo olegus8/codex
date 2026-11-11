@@ -459,7 +459,7 @@ async fn context_pause_finishes_running_tools_and_preserves_accepted_input() -> 
                 input_schema: json!({"type": "object", "properties": {}}),
                 defer_loading: false,
             })],
-            environments: Some(test.codex.environment_selections().await),
+            environments: Some(vec![test.executor_environment().request()]),
             ..StartThreadOptions::new(test.config.clone())
         })
         .await?;
