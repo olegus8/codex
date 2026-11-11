@@ -595,7 +595,8 @@ pub(crate) async fn run_turn(
                 .instrument(trace_span!("run_turn.prepare_sampling_request_input"))
                 .await;
             if !automatic_compaction_configured(&turn_context)
-                && let Some(usable_window) = step_context.settings.model_info.usable_context_window()
+                && let Some(usable_window) =
+                    step_context.settings.model_info.usable_context_window()
             {
                 let used_tokens = if sampling_request_input
                     .token_info()
@@ -1930,8 +1931,12 @@ async fn run_sampling_request(
                     } else if let Some(usable_window) =
                         step_context.settings.model_info.usable_context_window()
                     {
-                        super::context_window::record_exhaustion(&sess, &turn_context, usable_window)
-                            .await;
+                        super::context_window::record_exhaustion(
+                            &sess,
+                            &turn_context,
+                            usable_window,
+                        )
+                        .await;
                     }
                     return Err(err);
                 }

@@ -200,7 +200,10 @@ async fn no_auto_compact_stops_at_exhaustion_and_preserves_input(cause: Exhausti
             expect_exhaustion(&test).await;
         }
     }
-    for prompt in ["Preserve this handoff request", "Preserve this follow-up too"] {
+    for prompt in [
+        "Preserve this handoff request",
+        "Preserve this follow-up too",
+    ] {
         submit(&test, prompt).await?;
         expect_exhaustion(&test).await;
     }
