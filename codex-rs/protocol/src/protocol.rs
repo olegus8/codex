@@ -2531,6 +2531,14 @@ pub struct TokenUsageRecord {
     pub thread_token_usage: TokenUsage,
 }
 
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
+pub struct ContextWindowUsage {
+    #[ts(type = "number")]
+    pub used_tokens: i64,
+    #[ts(type = "number")]
+    pub context_window: i64,
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
 pub struct TokenUsageInfo {
     pub total_token_usage: TokenUsage,
@@ -2542,6 +2550,9 @@ pub struct TokenUsageInfo {
     // TODO(aibrahim): make this not optional
     #[ts(type = "number | null")]
     pub model_context_window: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub context_window_usage: Option<ContextWindowUsage>,
 }
 
 impl TokenUsageInfo {
@@ -2558,6 +2569,7 @@ impl TokenUsageInfo {
                 last_usage_includes_reasoning: None,
                 last_token_usage: TokenUsage::default(),
                 model_context_window,
+                context_window_usage: None,
             },
         };
         info.total_token_usage.add_assign(last);
@@ -2591,6 +2603,7 @@ impl TokenUsageInfo {
             last_usage_includes_reasoning: None,
             last_token_usage: TokenUsage::default(),
             model_context_window: Some(context_window),
+            context_window_usage: None,
         };
         info.fill_to_context_window(context_window);
         info
@@ -6735,6 +6748,7 @@ mod tests {
     #[test]
     fn token_usage_info_new_or_append_updates_context_window_when_provided() {
         let initial = Some(TokenUsageInfo {
+            context_window_usage: None,
             total_token_usage: TokenUsage::default(),
             last_usage_includes_reasoning: None,
             last_token_usage: TokenUsage::default(),
@@ -6763,6 +6777,7 @@ mod tests {
     #[test]
     fn token_usage_info_new_or_append_preserves_context_window_when_not_provided() {
         let initial = Some(TokenUsageInfo {
+            context_window_usage: None,
             total_token_usage: TokenUsage::default(),
             last_usage_includes_reasoning: None,
             last_token_usage: TokenUsage::default(),

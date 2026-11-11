@@ -310,6 +310,12 @@ impl EventProcessor for EventProcessorWithHumanOutput {
             }
             ServerNotification::TurnCompleted(notification) => match notification.turn.status {
                 TurnStatus::Completed => {
+                    if let Some(pause) = &notification.turn.context_pause {
+                        eprintln!(
+                            "Reached the {}% context pause threshold ({} of {} tokens used).",
+                            pause.threshold_percent, pause.used_tokens, pause.context_window,
+                        );
+                    }
                     let rendered_message = self
                         .final_message_rendered
                         .then(|| self.final_message.clone())
@@ -403,6 +409,13 @@ impl EventProcessor for EventProcessorWithHumanOutput {
                 "tokens used".style(self.dimmed),
                 format_with_separators(blended_total(usage))
             );
+            if let Some(context) = &usage.context_window_usage {
+                eprintln!(
+                    "context window: {} of {} tokens used",
+                    format_with_separators(context.used_tokens),
+                    format_with_separators(context.context_window),
+                );
+            }
         }
 
         #[allow(clippy::print_stdout)]

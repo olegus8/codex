@@ -401,6 +401,7 @@ use codex_protocol::protocol::StreamErrorEvent;
 use codex_protocol::protocol::ThreadMemoryMode;
 use codex_protocol::protocol::TokenCountEvent;
 use codex_protocol::protocol::TokenUsage;
+use codex_protocol::protocol::ContextWindowUsage;
 use codex_protocol::protocol::TokenUsageInfo;
 use codex_protocol::protocol::TokenUsageRecord;
 use codex_protocol::protocol::TurnModerationMetadataEvent;
@@ -5436,6 +5437,7 @@ impl Session {
                     }
                     TokenUsageContext::SpendingOnly => {
                         let mut info = state.token_info().unwrap_or(TokenUsageInfo {
+                            context_window_usage: None,
                             total_token_usage: TokenUsage::default(),
                             last_usage_includes_reasoning: None,
                             last_token_usage: TokenUsage::default(),
@@ -5494,6 +5496,7 @@ impl Session {
         {
             let mut state = self.state.lock().await;
             let mut info = state.token_info().unwrap_or(TokenUsageInfo {
+                context_window_usage: None,
                 total_token_usage: TokenUsage::default(),
                 last_usage_includes_reasoning: None,
                 last_token_usage: TokenUsage::default(),
@@ -5558,9 +5561,34 @@ impl Session {
     }
 
     pub(crate) async fn send_token_count_event(&self, turn_context: &TurnContext) {
+        self.send_context_token_count(turn_context, /*exhausted*/ false)
+            .await;
+    }
+
+    async fn send_context_token_count(&self, turn_context: &TurnContext, exhausted: bool) {
         let (info, rate_limits) = {
             let state = self.state.lock().await;
-            state.token_info_and_rate_limits()
+            let (mut info, rate_limits) = state.token_info_and_rate_limits();
+            if let Some(info) = &mut info {
+                info.context_window_usage = (!crate::compact::automatic_compaction_configured(
+                    turn_context,
+                ) || self
+                    .services
+                    .thread_extension_data
+                    .get::<crate::compact::AutoCompactionDisabled>()
+                    .is_some())
+                .then(|| turn_context.model_context_window())
+                .flatten()
+                .map(|context_window| ContextWindowUsage {
+                    used_tokens: if exhausted {
+                        context_window
+                    } else {
+                        state.get_reported_token_usage()
+                    },
+                    context_window,
+                });
+            }
+            (info, rate_limits)
         };
         let event = EventMsg::TokenCount(TokenCountEvent { info, rate_limits });
         self.send_event(turn_context, event).await;
@@ -5571,7 +5599,8 @@ impl Session {
             let mut state = self.state.lock().await;
             state.set_token_usage_full(context_window);
         }
-        self.send_token_count_event(turn_context).await;
+        self.send_context_token_count(turn_context, /*exhausted*/ true)
+            .await;
     }
 
     pub(crate) async fn record_response_item_and_emit_turn_item(

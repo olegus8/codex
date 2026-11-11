@@ -3,6 +3,26 @@ use crate::TS;
 use serde::Deserialize;
 use serde::Serialize;
 
+/// Runtime usage against the usable context limit.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct ContextWindowUsage {
+    #[ts(type = "number")]
+    pub used_tokens: i64,
+    #[ts(type = "number")]
+    pub context_window: i64,
+}
+
+impl From<codex_protocol::protocol::ContextWindowUsage> for ContextWindowUsage {
+    fn from(value: codex_protocol::protocol::ContextWindowUsage) -> Self {
+        Self {
+            used_tokens: value.used_tokens,
+            context_window: value.context_window,
+        }
+    }
+}
+
 /// A turn paused at the configured share of the usable context window.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
