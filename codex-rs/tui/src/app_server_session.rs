@@ -4684,6 +4684,7 @@ mod tests {
                 git_info: None,
                 name: None,
                 turns: vec![Turn {
+                    context_pause: None,
                     id: "turn-1".to_string(),
                     root_turn_id: None,
                     items_view: codex_app_server_protocol::TurnItemsView::Full,

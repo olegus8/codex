@@ -10,7 +10,9 @@
 )]
 
 use crate::DbTelemetry;
+use crate::migrations::migrate_fork_thread_history;
 use crate::migrations::repair_legacy_recency_migration_version;
+use crate::migrations::repair_legacy_thread_history_migrations;
 use crate::runtime::recovery::RuntimeDbInitError;
 use crate::telemetry;
 use crate::telemetry::DbKind;
@@ -413,7 +415,14 @@ impl SqliteConfig {
             if matches!(spec.kind, DbKind::State) {
                 repair_legacy_recency_migration_version(&pool, migrator).await?;
             }
-            migrator.run(&pool).await.map_err(anyhow::Error::from)
+            if matches!(spec.kind, DbKind::ThreadHistory) {
+                repair_legacy_thread_history_migrations(&pool, migrator).await?;
+            }
+            migrator.run(&pool).await?;
+            if matches!(spec.kind, DbKind::ThreadHistory) {
+                migrate_fork_thread_history(&pool).await?;
+            }
+            Ok::<_, anyhow::Error>(())
         }
         .await;
         telemetry::record_init_result(
