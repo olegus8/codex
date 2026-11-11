@@ -105,6 +105,23 @@ pub(super) async fn acknowledge_user_input(session: &Session, explicit_user: boo
     }
 }
 
+pub(super) async fn can_pause(session: &Session, turn: &TurnContext) -> bool {
+    turn.config.model_context_pause_percent.is_some()
+        && !session.state.lock().await.context_pause.reached
+}
+
+pub(super) fn reached_threshold(
+    turn: &TurnContext,
+    status: &ContextWindowTokenStatus,
+) -> Option<(u8, i64)> {
+    let threshold_percent = turn.config.model_context_pause_percent?;
+    let context_window = status.full_context_window_limit?;
+    (context_window > 0
+        && i128::from(status.active_context_tokens) * 100
+            >= i128::from(context_window) * i128::from(threshold_percent))
+    .then_some((threshold_percent, context_window))
+}
+
 #[expect(
     clippy::await_holding_invalid_type,
     reason = "suspension and marking the active task as pausing must be atomic"
@@ -114,19 +131,9 @@ pub(crate) async fn maybe_pause(
     turn: &TurnContext,
     status: &ContextWindowTokenStatus,
 ) -> bool {
-    let (Some(threshold_percent), Some(context_window)) = (
-        turn.config.model_context_pause_percent,
-        status.full_context_window_limit,
-    ) else {
+    let Some((threshold_percent, context_window)) = reached_threshold(turn, status) else {
         return false;
     };
-    let used_tokens = status.active_context_tokens;
-    if context_window <= 0
-        || i128::from(used_tokens) * 100
-            < i128::from(context_window) * i128::from(threshold_percent)
-    {
-        return false;
-    }
 
     // Suspension removes the task under this lock. It must see the pause marker
     // before it can hand the turn off for automatic recovery.
@@ -146,7 +153,7 @@ pub(crate) async fn maybe_pause(
     state.context_pause.waiting_for_user = true;
     turn.extension_data.insert(ContextPause {
         thread_id: session.thread_id(),
-        used_tokens,
+        used_tokens: status.active_context_tokens,
         context_window,
         threshold_percent,
         resumed_by_user: false,

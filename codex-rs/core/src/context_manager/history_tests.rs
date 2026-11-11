@@ -1270,6 +1270,48 @@ fn total_token_usage_includes_all_items_since_last_usage(includes_reasoning: boo
     );
 }
 
+#[test]
+fn reported_context_usage_counts_items_after_its_checkpoint_once() {
+    let mut history = create_history_with_items(vec![assistant_msg("already counted")]);
+    history.update_token_info(
+        &TokenUsage {
+            total_tokens: 120_000,
+            ..Default::default()
+        },
+        Some(190_000),
+        /*includes_reasoning*/ true,
+        /*input_item_count*/ 0,
+    );
+    let input = user_msg("new user input");
+    history.record_items([&input], TruncationPolicy::Tokens(10_000));
+    let mut estimated = 120_000 + estimate_item_token_count(&input);
+    let input_item_count = history.raw_items().len();
+    for len in [2_000, 4_000] {
+        let completed = reasoning_with_encrypted_content(len);
+        history.record_items([&completed], TruncationPolicy::Tokens(10_000));
+        estimated += estimate_item_token_count(&completed);
+        assert_eq!(history.get_total_token_usage(), estimated);
+    }
+    history.update_token_info(
+        &TokenUsage {
+            total_tokens: 121_000,
+            ..Default::default()
+        },
+        Some(190_000),
+        /*includes_reasoning*/ true,
+        input_item_count,
+    );
+    assert_eq!(history.get_total_token_usage(), 121_000);
+    assert_eq!(
+        history
+            .token_info()
+            .expect("provider usage")
+            .total_token_usage
+            .total_tokens,
+        241_000,
+    );
+}
+
 /// Unavailable images become harness-attributed placeholders without changing saved history or
 /// neighboring inline content and its annotations.
 #[tokio::test]

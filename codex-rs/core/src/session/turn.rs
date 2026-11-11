@@ -42,6 +42,7 @@ use crate::responses_retry::ResponsesStreamRetryState;
 use crate::responses_retry::handle_response_stream_error;
 use crate::session::PreviousTurnSettings;
 use crate::session::TurnInput;
+use crate::session::context_window::ContextWindowTokenStatus;
 use crate::session::daemon_recovery::RecordedTurnInput;
 use crate::session::session::Session;
 use crate::session::step_context::StepContext;
@@ -649,6 +650,7 @@ pub(crate) async fn run_turn(
                 let SamplingRequestResult {
                     needs_follow_up: model_needs_follow_up,
                     last_agent_message: sampling_request_last_agent_message,
+                    pause_at_item,
                 } = sampling_request_output;
                 if model_needs_follow_up {
                     sess.input_queue
@@ -664,11 +666,13 @@ pub(crate) async fn run_turn(
                 let (has_pending_input, token_status) = async {
                     let has_pending_input =
                         sess.input_queue.has_pending_input(&sess.active_turn).await;
-                    let token_status = super::context_window::context_window_token_status(
-                        sess.as_ref(),
-                        turn_context.as_ref(),
-                    )
-                    .await;
+                    let token_status = match pause_at_item {
+                        Some(status) => status,
+                        None => {
+                            super::context_window::context_window_token_status(&sess, &turn_context)
+                                .await
+                        }
+                    };
                     (has_pending_input, token_status)
                 }
                 .instrument(trace_span!("run_turn.collect_post_sampling_state"))
@@ -2058,6 +2062,7 @@ async fn run_sampling_request(
                 SamplingRequestResult {
                     needs_follow_up: true,
                     last_agent_message: None,
+                    pause_at_item: None,
                 },
                 notify_messages,
             ));
@@ -2207,6 +2212,7 @@ pub(crate) async fn built_tools(
 struct SamplingRequestResult {
     needs_follow_up: bool,
     last_agent_message: Option<String>,
+    pause_at_item: Option<ContextWindowTokenStatus>,
 }
 
 /// Ephemeral per-response state for streaming a single proposed plan.
@@ -3026,7 +3032,26 @@ async fn try_run_sampling_request(
     let mut active_item_is_streaming_to_client = false;
     let mut received_output = false;
     let receiving_span = trace_span!("receiving_stream");
+    let pause_during_stream = super::context_pause::can_pause(&sess, &turn_context).await;
+    let mut check_pause_after_item = false;
     let outcome: CodexResult<SamplingRequestResult> = loop {
+        if std::mem::take(&mut check_pause_after_item) && !cancellation_token.is_cancelled() {
+            let status = super::context_window::context_window_token_status_for_model(
+                &sess,
+                &turn_context.config,
+                &turn_context,
+                &step_context.settings.model_info,
+            )
+            .await;
+            if super::context_pause::reached_threshold(&turn_context, &status).is_some() {
+                // Keep the usage at this boundary while admitted tools finish.
+                break Ok(SamplingRequestResult {
+                    needs_follow_up,
+                    last_agent_message,
+                    pause_at_item: Some(status),
+                });
+            }
+        }
         let handle_responses = trace_span!(
             parent: &receiving_span,
             "handle_responses",
@@ -3077,6 +3102,7 @@ async fn try_run_sampling_request(
                 break Ok(SamplingRequestResult {
                     needs_follow_up: true,
                     last_agent_message,
+                    pause_at_item: None,
                 });
             }
             Err(_) => break Err(CodexErr::TurnAborted),
@@ -3117,6 +3143,7 @@ async fn try_run_sampling_request(
                     break Ok(SamplingRequestResult {
                         needs_follow_up: true,
                         last_agent_message,
+                        pause_at_item: None,
                     });
                 }
                 if received_output
@@ -3163,6 +3190,7 @@ async fn try_run_sampling_request(
                 }
             }
             ResponseEvent::OutputItemDone(mut item) => {
+                check_pause_after_item = pause_during_stream;
                 // Serving emits one final value immediately before this item's completion.
                 // After this handoff, the invocation/cell owns it independently of the stream.
                 let assessment = pending_assessment
@@ -3327,6 +3355,7 @@ async fn try_run_sampling_request(
                     break Ok(SamplingRequestResult {
                         needs_follow_up: true,
                         last_agent_message,
+                        pause_at_item: None,
                     });
                 }
             }
@@ -3528,6 +3557,7 @@ async fn try_run_sampling_request(
                 break Ok(SamplingRequestResult {
                     needs_follow_up,
                     last_agent_message,
+                    pause_at_item: None,
                 });
             }
             ResponseEvent::OutputTextDelta(delta) => {
@@ -3679,7 +3709,11 @@ async fn try_run_sampling_request(
             }
         }
     };
-    if cancellation_token.is_cancelled() && !response_completed && can_interrupt {
+    let paused_stream = outcome
+        .as_ref()
+        .is_ok_and(|result| result.pause_at_item.is_some());
+    if (cancellation_token.is_cancelled() || paused_stream) && !response_completed && can_interrupt
+    {
         let deadline = tokio::time::Instant::now() + Duration::from_secs(1);
         if let Some(interrupt) = stream.interrupt.take() {
             let _ = interrupt.send(codex_api::ResponseInterrupt::Cancel { deadline });
