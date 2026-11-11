@@ -1139,6 +1139,7 @@ pub(super) fn app_server_turn(
     error: Option<AppServerTurnError>,
 ) -> AppServerTurn {
     AppServerTurn {
+        context_pause: None,
         id: turn_id.to_string(),
         root_turn_id: None,
         items_view: codex_app_server_protocol::TurnItemsView::Full,

@@ -149,6 +149,7 @@ impl ChatWidget {
                 completed_at,
                 duration_ms,
                 context_pause,
+                ..
             } = turn;
             let delegated = items.iter().any(|item| {
                 matches!(&item.payload, ThreadItemPayload::UserMessage { content, .. }
