@@ -391,6 +391,10 @@ impl SessionState {
         self.history.get_total_token_usage()
     }
 
+    pub(crate) fn get_reported_token_usage(&self) -> i64 {
+        self.history.get_reported_token_usage()
+    }
+
     pub(crate) fn record_mcp_dependency_prompted<I>(&mut self, names: I)
     where
         I: IntoIterator<Item = String>,

@@ -658,6 +658,9 @@ pub struct Config {
     /// Percentage of the usable context window at which a thread pauses once.
     pub model_context_pause_percent: Option<u8>,
 
+    /// Whether automatic context compaction and resets are enabled.
+    pub model_auto_compact_enabled: bool,
+
     /// Token usage threshold triggering auto-compaction of conversation history.
     pub model_auto_compact_token_limit: Option<i64>,
 
@@ -4548,6 +4551,7 @@ impl Config {
             review_model,
             model_context_window: cfg.model_context_window,
             model_context_pause_percent: cfg.model_context_pause_percent,
+            model_auto_compact_enabled: cfg.model_auto_compact_enabled.unwrap_or(true),
             model_auto_compact_token_limit: cfg.model_auto_compact_token_limit,
             model_auto_compact_token_limit_scope: cfg
                 .model_auto_compact_token_limit_scope

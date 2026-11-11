@@ -9,6 +9,7 @@ use crate::client::ModelClientSession;
 use crate::client_common::Prompt;
 use crate::client_common::ResponseEvent;
 use crate::compact::AutoCompactionDisabled;
+use crate::compact::automatic_compaction_configured;
 use crate::compact::run_inline_auto_compact_task;
 use crate::compact_remote_v2::BackgroundCompactionCandidate;
 use crate::compact_remote_v2::run_inline_remote_auto_compact_task as run_inline_remote_auto_compact_task_v2;
@@ -197,11 +198,13 @@ pub(crate) async fn run_turn(
             Ok(_) => Err(uploaded_audio_disabled_error()),
         };
     }
-    let auto_compaction_enabled = sess
+    let thread_auto_compaction_enabled = sess
         .services
         .thread_extension_data
         .get::<AutoCompactionDisabled>()
         .is_none();
+    let auto_compaction_enabled =
+        thread_auto_compaction_enabled && automatic_compaction_configured(&turn_context);
     let auto_summarization_enabled =
         auto_compaction_enabled && !turn_context.config.features.enabled(Feature::TokenBudget);
     if crate::guardian::is_basic_session_source(&turn_context.session_source) {
@@ -721,8 +724,9 @@ pub(crate) async fn run_turn(
                     && (sess.take_new_context_window_request().await
                         || token_limit_reached
                         || candidate.is_some());
-                if auto_compaction_enabled {
-                    let allow_auto_compact_fallback = !should_roll_over && !token_limit_reached;
+                if thread_auto_compaction_enabled {
+                    let allow_auto_compact_fallback =
+                        auto_compaction_enabled && !should_roll_over && !token_limit_reached;
                     super::token_budget::maybe_record(
                         sess.as_ref(),
                         turn_context.as_ref(),

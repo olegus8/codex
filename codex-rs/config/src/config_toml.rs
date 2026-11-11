@@ -183,6 +183,9 @@ pub struct ConfigToml {
     #[schemars(range(min = 1, max = 99))]
     pub model_context_pause_percent: Option<u8>,
 
+    /// Whether automatic context compaction and resets are enabled. Defaults to true.
+    pub model_auto_compact_enabled: Option<bool>,
+
     /// Token usage threshold triggering auto-compaction of conversation history.
     pub model_auto_compact_token_limit: Option<i64>,
 
