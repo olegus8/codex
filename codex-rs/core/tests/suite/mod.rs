@@ -166,6 +166,7 @@ mod multi_agent_tool_descriptions;
 #[cfg(unix)]
 mod multi_exec_server_sandbox;
 mod network_approval;
+mod no_auto_compact;
 mod openai_file_mcp;
 mod otel;
 mod output_token_replay;
