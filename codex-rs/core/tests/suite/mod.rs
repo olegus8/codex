@@ -77,6 +77,7 @@ mod compact_remote;
 mod compact_resume_fork;
 mod context_annotations;
 mod context_pause;
+mod context_pause_reasoning;
 mod current_time_reminder;
 mod cyber_access_program;
 mod cyber_exec_policy;

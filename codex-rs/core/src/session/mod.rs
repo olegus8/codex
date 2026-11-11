@@ -1592,6 +1592,11 @@ impl Session {
         state.get_total_token_usage()
     }
 
+    pub(crate) async fn get_reported_token_usage(&self) -> i64 {
+        let state = self.state.lock().await;
+        state.get_reported_token_usage()
+    }
+
     pub(crate) async fn auto_compact_window_snapshot(&self) -> AutoCompactWindowSnapshot {
         let state = self.state.lock().await;
         state.auto_compact_window_snapshot()
