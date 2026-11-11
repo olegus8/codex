@@ -66,6 +66,8 @@ def terminal(case):
         (b"Context exhausted. History is preserved.", b"\x04", 8),
     ]
     stage = 0
+    turn_start = 0
+    idle = b"\x1b]7501;state=idle:app=codex\x1b\\"
     deadline = time.monotonic() + 90
     next_quit = None
     try:
@@ -92,11 +94,18 @@ def terminal(case):
                         pending = pending.replace(query, b"")
                 pending = pending[-128:]
             visible = re.sub(rb"\x1b\[[0-?]*[ -/]*[@-~]", b"", output)
-            if stage < len(stages) and stages[stage][0] in visible:
+            if stage < len(stages):
                 marker, prompt, count = stages[stage]
+                marker_start = visible.find(marker, turn_start)
+                if marker_start < 0:
+                    continue
+                idle_start = visible.find(idle, marker_start + len(marker))
+                if idle_start < 0:
+                    continue
                 assert len(fixture.requests) == count, (stage, count)
                 process.stdin.write(prompt)
                 process.stdin.flush()
+                turn_start = idle_start + len(idle)
                 stage += 1
                 progress(
                     scenario=case.directory.name,
