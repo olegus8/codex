@@ -15,6 +15,7 @@ use codex_protocol::openai_models::AutoReviewMessages;
 use codex_protocol::openai_models::ModelMessages;
 use codex_protocol::protocol::AgentStatus;
 use codex_protocol::protocol::ErrorEvent;
+use codex_protocol::protocol::TokenUsage;
 use codex_protocol::protocol::TurnAbortReason;
 use codex_protocol::protocol::TurnAbortedEvent;
 use codex_protocol::protocol::TurnCompleteEvent;
@@ -679,6 +680,66 @@ async fn guardian_review_session_config_resolves_policy_and_template(
             .expect_text()
         )
     );
+}
+
+#[tokio::test]
+async fn guardian_compacts_when_parent_disables_automatic_compaction() {
+    let (parent, parent_turn, _events) =
+        crate::session::tests::make_session_and_context_with_auth_and_config_and_rx(
+            codex_login::CodexAuth::from_api_key("Test API Key"),
+            Vec::new(),
+            |config| config.model_auto_compact_enabled = false,
+        )
+        .await;
+    let mut params = test_review_params().await;
+    params.parent_session = parent;
+    params.parent_context = GuardianReviewContext::from(parent_turn);
+    params
+        .spawn_config
+        .features
+        .enable(Feature::TokenBudget)
+        .unwrap();
+    params.spawn_config.model_context_window = Some(100_000);
+    params.spawn_config.model_auto_compact_token_limit = Some(90_000);
+
+    let (reviewer, _tx_event, rx_sub) = test_review_session().await;
+    let history = serde_json::from_value(serde_json::json!([
+        {"type": "reasoning", "summary": [], "encrypted_content": "a".repeat(100_000)},
+        {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "Review"}]},
+        {"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "Done"}]}
+    ]))
+    .unwrap();
+    reviewer
+        .session
+        .replace_history(history, /*reference_context_item*/ None)
+        .await;
+    let reviewer_turn = reviewer.session.new_default_turn().await;
+    reviewer
+        .session
+        .update_token_usage_info(
+            &reviewer_turn,
+            Some(&TokenUsage {
+                input_tokens: 85_000,
+                total_tokens: 85_000,
+                ..Default::default()
+            }),
+            /*includes_reasoning*/ false,
+        )
+        .await
+        .unwrap();
+
+    tokio::select! {
+        submission = rx_sub.recv() => {
+            let submission = submission.expect("guardian submission");
+            assert!(matches!(submission.op, Op::Compact), "Guardian must compact before review");
+        }
+        _ = run_review_on_session(
+            &reviewer,
+            &params,
+            GuardianReviewSessionKind::TrunkReused,
+            params.deadline,
+        ) => panic!("review completed without submitting compaction"),
+    }
 }
 
 #[tokio::test]
