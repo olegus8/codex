@@ -8,14 +8,18 @@ use pretty_assertions::assert_eq;
 
 #[tokio::test]
 async fn fixed_session_model_rejects_queued_changes_on_the_server() -> Result<()> {
+    boxed_future!(fixed_session_model_rejects_queued_changes_scenario()).await
+}
+
+async fn fixed_session_model_rejects_queued_changes_scenario() -> Result<()> {
     let (mut app, _events, _ops) = make_test_app_with_channels().await;
     app.config.model = Some("gpt-5.5".into());
-    let mut server = Box::pin(crate::start_embedded_app_server_for_picker(&app.config)).await?;
+    let mut server =
+        boxed_future!(crate::start_embedded_app_server_for_picker(&app.config)).await?;
     let started = server.start_thread(&app.config).await?;
     let thread_id = started.session.thread_id;
     let model = started.session.model.clone();
-    app.enqueue_primary_thread_session(started.session, started.turns)
-        .await?;
+    boxed_future!(app.enqueue_primary_thread_session(started.session, started.turns)).await?;
     app.local_settings.model_switching_enabled = false;
     app.chat_widget.local_settings.model_switching_enabled = false;
     let mut tui = crate::tui::test_support::make_test_tui()?;
@@ -37,7 +41,7 @@ async fn fixed_session_model_rejects_queued_changes_on_the_server() -> Result<()
             effort: ReasoningEffortConfig::High,
         },
     ] {
-        Box::pin(app.handle_event(&mut tui, &mut server, event)).await?;
+        boxed_future!(app.handle_event(&mut tui, &mut server, event)).await?;
         assert_eq!(app.chat_widget.current_model(), model);
     }
     let mut collaboration_mode = app.chat_widget.effective_collaboration_mode();

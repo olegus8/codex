@@ -371,7 +371,7 @@ async fn fixed_session_model_keeps_buffered_turn_running() {
     chat.handle_server_notification(
         ServerNotification::ModelSafetyBufferingUpdated(safety_buffering_notification(
             thread_id,
-            turn_id.clone(),
+            turn_id,
             Some("faster-model"),
         )),
         /*replay_kind*/ None,
@@ -379,7 +379,7 @@ async fn fixed_session_model_keeps_buffered_turn_running() {
 
     assert!(chat.turn_lifecycle.agent_turn_running);
     assert!(chat.bottom_pane.no_modal_or_popup_active());
-    assert!(!chat.can_retry_safety_buffered_turn(&turn_id));
+    assert!(!chat.can_retry_safety_buffered_turn(turn_id));
     assert_eq!(chat.current_model(), model);
     assert!(op_rx.try_recv().is_err());
 }
