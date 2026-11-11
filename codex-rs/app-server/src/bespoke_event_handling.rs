@@ -170,6 +170,7 @@ pub(crate) async fn apply_bespoke_event_handling(
                 let state = thread_state.lock().await;
                 let turn = state.active_turn_metadata_snapshot().map(Turn::from);
                 turn.unwrap_or_else(|| Turn {
+                    context_pause: None,
                     id: payload.turn_id.clone(),
                     root_turn_id: payload.root_turn_id.clone(),
                     items: Vec::new(),
@@ -1406,6 +1407,7 @@ async fn emit_turn_completed_with_status(
     let notification = TurnCompletedNotification {
         thread_id: conversation_id.to_string(),
         turn: Turn {
+            context_pause: None,
             id: event_turn_id,
             root_turn_id: turn_completion_metadata.root_turn_id,
             items,

@@ -7523,6 +7523,7 @@ session_picker_view = "dense"
             git_info: None,
             name: None,
             turns: vec![codex_app_server_protocol::Turn {
+                context_pause: None,
                 id: String::from("turn-1"),
                 root_turn_id: None,
                 items_view: codex_app_server_protocol::TurnItemsView::Full,
@@ -7624,6 +7625,7 @@ session_picker_view = "dense"
             git_info: None,
             name: None,
             turns: vec![codex_app_server_protocol::Turn {
+                context_pause: None,
                 id: String::from("turn-1"),
                 root_turn_id: None,
                 items_view: codex_app_server_protocol::TurnItemsView::Full,
@@ -7703,6 +7705,7 @@ session_picker_view = "dense"
             git_info: None,
             name: None,
             turns: vec![codex_app_server_protocol::Turn {
+                context_pause: None,
                 id: String::from("turn-1"),
                 root_turn_id: None,
                 items_view: codex_app_server_protocol::TurnItemsView::Full,

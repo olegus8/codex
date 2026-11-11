@@ -2381,10 +2381,13 @@ pub struct SafetyBufferingEvent {
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]
 pub struct ContextCompactedEvent;
 
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
+/// A once-per-thread pause measured against the usable context window.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, JsonSchema, TS)]
 pub struct ContextPause {
     pub thread_id: ThreadId,
+    #[ts(type = "number")]
     pub used_tokens: i64,
+    #[ts(type = "number")]
     pub context_window: i64,
     pub threshold_percent: u8,
     /// A user message steered into the ending turn already answered the pause.
