@@ -594,6 +594,27 @@ pub(crate) async fn run_turn(
                 .clone_history()
                 .instrument(trace_span!("run_turn.prepare_sampling_request_input"))
                 .await;
+            if !automatic_compaction_configured(&turn_context)
+                && let Some(usable_window) =
+                    step_context.settings.model_info.usable_context_window()
+            {
+                let used_tokens = if sampling_request_input
+                    .token_info()
+                    .is_some_and(|info| info.last_token_usage.total_tokens > 0)
+                {
+                    sampling_request_input.get_total_token_usage()
+                } else {
+                    let base_instructions = sess.get_prompt_base_instructions().await;
+                    sampling_request_input
+                        .estimate_token_count_with_base_instructions(&base_instructions)
+                        .unwrap_or_default()
+                };
+                if used_tokens >= usable_window {
+                    super::context_window::record_exhaustion(&sess, &turn_context, usable_window)
+                        .await;
+                    return Err(CodexErr::ContextWindowExceeded);
+                }
+            }
 
             run_sampling_request(
                 Arc::clone(&sess),
@@ -1905,7 +1926,18 @@ async fn run_sampling_request(
             }
             Err(err) => match err.details() {
                 CodexErrorDetails::ContextWindowExceeded => {
-                    sess.set_total_tokens_full(&turn_context).await;
+                    if automatic_compaction_configured(&turn_context) {
+                        sess.set_total_tokens_full(&turn_context).await;
+                    } else if let Some(usable_window) =
+                        step_context.settings.model_info.usable_context_window()
+                    {
+                        super::context_window::record_exhaustion(
+                            &sess,
+                            &turn_context,
+                            usable_window,
+                        )
+                        .await;
+                    }
                     return Err(err);
                 }
                 CodexErrorDetails::UsageLimitReached(e) => {
