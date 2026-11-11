@@ -437,6 +437,10 @@ pub struct ThreadResumeParams {
 #[ts(export_to = "v2/")]
 pub struct ThreadResumeResponse {
     pub thread: Thread,
+    /// Context pause currently waiting for user input.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub waiting_context_pause: Option<super::WaitingContextPause>,
     pub model: String,
     pub model_provider: String,
     pub service_tier: Option<String>,
@@ -654,6 +658,10 @@ pub struct ThreadForkParams {
 #[ts(export_to = "v2/")]
 pub struct ThreadForkResponse {
     pub thread: Thread,
+    /// Context pause currently waiting for user input in the fork.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub waiting_context_pause: Option<super::WaitingContextPause>,
     pub model: String,
     pub model_provider: String,
     pub service_tier: Option<String>,

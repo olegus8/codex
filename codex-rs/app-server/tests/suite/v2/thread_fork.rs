@@ -1606,11 +1606,13 @@ async fn thread_fork_creates_reference_backed_paginated_thread() -> Result<()> {
         .await?;
     let ThreadForkResponse {
         thread: forked_thread,
+        waiting_context_pause,
         ..
     } = timeout(DEFAULT_READ_TIMEOUT, mcp.read_response(fork_id)).await??;
     assert_eq!(forked_thread.forked_from_id, Some(conversation_id.clone()));
     assert_eq!(forked_thread.turns.len(), 1);
     assert_eq!(forked_thread.turns[0].context_pause, Some(pause.into()));
+    assert_eq!(waiting_context_pause, None);
     let forked_thread_id = forked_thread.id.clone();
     let forked_path = forked_thread.path.expect("forked rollout path");
     assert!(!std::fs::read_to_string(forked_path.as_path())?.contains("Saved user message"));

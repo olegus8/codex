@@ -2672,6 +2672,7 @@ async fn thread_session_state_from_thread_resume_response(
     )
     .await?;
     session.collaboration_mode = response.collaboration_mode.clone().map(Box::new);
+    session.waiting_context_pause = response.waiting_context_pause.clone();
     session.daybreak_enabled = response.thread.daybreak_enabled.unwrap_or(false);
     Ok(session)
 }
@@ -2708,6 +2709,7 @@ async fn thread_session_state_from_thread_fork_response(
         local_settings,
     )
     .await?;
+    session.waiting_context_pause = response.waiting_context_pause.clone();
     session.daybreak_enabled = response.thread.daybreak_enabled.unwrap_or(false);
     Ok(session)
 }
@@ -2773,6 +2775,7 @@ async fn thread_session_state_from_thread_response(
     );
     let (log_id, entry_count) = codex_message_history::history_metadata(&history_config).await;
     Ok(ThreadSessionState {
+        waiting_context_pause: None,
         daybreak_enabled: false,
         windows_sandbox_host,
         thread_id,
@@ -4650,6 +4653,7 @@ mod tests {
         let forked_from_id = ThreadId::new();
         let read_only_profile = PermissionProfile::read_only();
         let response = ThreadResumeResponse {
+            waiting_context_pause: None,
             disabled_plugin_ids: Vec::new(),
             thread: codex_app_server_protocol::Thread {
                 originator: None,

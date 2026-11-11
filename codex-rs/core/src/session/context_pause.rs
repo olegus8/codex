@@ -16,6 +16,7 @@ use codex_thread_store::PersistContext;
 pub(crate) struct ContextPauseState {
     reached: bool,
     pub(crate) waiting_for_user: bool,
+    details: Option<ContextPause>,
 }
 
 impl ContextPauseState {
@@ -29,11 +30,14 @@ impl ContextPauseState {
                     if let Some(pause) = compacted
                         .resume_metadata
                         .as_ref()
-                        .and_then(|metadata| metadata.context_pause)
+                        .and_then(|metadata| metadata.context_pause.as_ref())
                         .filter(|pause| pause.thread_id == thread_id)
                     {
                         state.reached = true;
                         state.waiting_for_user = pause.waiting_for_user;
+                        if pause.details.is_some() {
+                            state.details.clone_from(&pause.details);
+                        }
                     }
                 }
                 RolloutItem::EventMsg(EventMsg::TurnComplete(event)) => {
@@ -44,6 +48,7 @@ impl ContextPauseState {
                     {
                         state.reached = true;
                         state.waiting_for_user = !pause.resumed_by_user;
+                        state.details = Some(pause.clone());
                     }
                 }
                 RolloutItem::ResponseItem(envelope) if matches!(&envelope.item, ResponseItem::Message { role, .. } if role == "user") =>
@@ -80,11 +85,22 @@ impl ContextPauseState {
     }
 
     pub(crate) fn checkpoint(&self, thread_id: ThreadId) -> Option<CompactionContextPause> {
-        self.reached.then_some(CompactionContextPause {
+        self.reached.then(|| CompactionContextPause {
             thread_id,
             waiting_for_user: self.waiting_for_user,
+            details: self.details.clone().filter(|_| self.waiting_for_user),
         })
     }
+}
+
+pub(crate) async fn waiting_context_pause(session: &Session) -> Option<CompactionContextPause> {
+    session
+        .state
+        .lock()
+        .await
+        .context_pause
+        .checkpoint(session.thread_id())
+        .filter(|pause| pause.waiting_for_user)
 }
 
 pub(super) async fn require_user_input(
@@ -144,13 +160,15 @@ pub(crate) async fn maybe_pause(
     }
     state.context_pause.reached = true;
     state.context_pause.waiting_for_user = true;
-    turn.extension_data.insert(ContextPause {
+    let pause = ContextPause {
         thread_id: session.thread_id(),
         used_tokens,
         context_window,
         threshold_percent,
         resumed_by_user: false,
-    });
+    };
+    state.context_pause.details = Some(pause.clone());
+    turn.extension_data.insert(pause);
     true
 }
 

@@ -4280,7 +4280,15 @@ async fn cold_paginated_resume_returns_the_saved_context_pause() -> Result<()> {
         .await?;
     let page = response.initial_turns_page.expect("initial turns page");
     assert_eq!(page.data[0].id, "paused-turn");
-    assert_eq!(page.data[0].context_pause, Some(pause.into()));
+    let pause = pause.into();
+    assert_eq!(page.data[0].context_pause.as_ref(), Some(&pause));
+    assert_eq!(
+        response
+            .waiting_context_pause
+            .expect("restored context pause")
+            .details,
+        Some(pause),
+    );
     Ok(())
 }
 

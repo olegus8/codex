@@ -95,6 +95,13 @@ fn only_a_user_message_ends_a_restored_pause() {
         Some(CompactionContextPause {
             thread_id,
             waiting_for_user,
+            details: waiting_for_user.then_some(ContextPause {
+                thread_id,
+                used_tokens: 133_000,
+                context_window: 190_000,
+                threshold_percent: 70,
+                resumed_by_user: false,
+            }),
         })
     };
     assert_eq!(
@@ -148,6 +155,7 @@ fn a_compaction_carries_the_pause_into_a_bounded_resume() {
         Some(CompactionContextPause {
             thread_id,
             waiting_for_user,
+            details: None,
         })
     };
     assert_eq!(
@@ -168,6 +176,7 @@ fn a_fork_does_not_inherit_its_parent_pause() {
     let parent_pause = Some(CompactionContextPause {
         thread_id: parent,
         waiting_for_user: true,
+        details: None,
     });
     assert_eq!(
         restored(fork, &[compaction(parent_pause), paused_turn(parent)]),
