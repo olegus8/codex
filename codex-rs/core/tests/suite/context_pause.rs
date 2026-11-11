@@ -19,6 +19,7 @@ use core_test_support::responses::ev_assistant_message;
 use core_test_support::responses::ev_completed;
 use core_test_support::responses::ev_completed_with_tokens;
 use core_test_support::responses::ev_function_call;
+use core_test_support::responses::ev_reasoning_item;
 use core_test_support::responses::mount_sse_once;
 use core_test_support::responses::sse;
 use core_test_support::responses::start_mock_server;
@@ -141,6 +142,89 @@ async fn context_pause_stops_before_the_next_model_request(
         );
         assert!(rollout.contains("Plan updated"));
     }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn context_pause_stops_at_the_first_completed_item_in_a_long_stream() -> Result<()> {
+    skip_if_no_network!(Ok(()));
+    let server = start_mock_server().await;
+    mount_sse_once(
+        &server,
+        sse(vec![
+            plan_call("first-tool"),
+            ev_completed_with_tokens("r1", /*total_tokens*/ 120_000),
+        ]),
+    )
+    .await;
+    let below_threshold = ev_reasoning_item("below-threshold", &[], &[&"x".repeat(2_000)]);
+    let crossing = ev_reasoning_item("crossing", &[], &[&"y".repeat(54_000)]);
+    let later = ev_reasoning_item("later", &[], &[&"z".repeat(54_000)]);
+    let expected_reasoning =
+        [&below_threshold, &crossing].map(|event| event["item"]["encrypted_content"].clone());
+    let long_response = mount_sse_once(
+        &server,
+        sse(vec![
+            plan_call("stream-tool"),
+            below_threshold,
+            crossing,
+            later,
+            plan_call("later-tool"),
+            ev_completed_with_tokens("r2", /*total_tokens*/ 180_000),
+        ]),
+    )
+    .await;
+    let after_restart = mount_sse_once(
+        &server,
+        sse(vec![
+            ev_assistant_message("m3", "Continued"),
+            ev_completed_with_tokens("r3", /*total_tokens*/ 140_000),
+        ]),
+    )
+    .await;
+
+    let mut factory = builder();
+    let test = factory.build_with_auto_env(&server).await?;
+    let event = turn(&test, "Do the long work").await?;
+    let used = event["context_pause"]["used_tokens"]
+        .as_i64()
+        .expect("pause before response.completed");
+    assert!((133_000..136_000).contains(&used), "paused at {used}");
+    assert_eq!(long_response.requests().len(), 1);
+    assert!(after_restart.requests().is_empty());
+
+    let restarted = factory.restart_with_auto_env(&server, &test).await?;
+    assert!(
+        restarted
+            .codex
+            .start_turn_if_idle(TurnInputRequest::user_input(Vec::new()))
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("explicit user input")
+    );
+    assert!(turn(&restarted, "Continue").await?["context_pause"].is_null());
+    let resumed = after_restart.single_request();
+    assert_eq!(
+        resumed
+            .inputs_of_type("reasoning")
+            .iter()
+            .map(|item| item["encrypted_content"].clone())
+            .collect::<Vec<_>>(),
+        expected_reasoning.to_vec(),
+    );
+    for id in ["first-tool", "stream-tool"] {
+        assert_eq!(
+            resumed.function_call_output_text(id).as_deref(),
+            Some("Plan updated"),
+        );
+    }
+    assert!(
+        resumed
+            .input()
+            .iter()
+            .all(|item| item["call_id"] != "later-tool")
+    );
     Ok(())
 }
 
