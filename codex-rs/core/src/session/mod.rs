@@ -380,6 +380,7 @@ use codex_protocol::openai_models::ReasoningEffort as ReasoningEffortConfig;
 use codex_protocol::protocol::ApplyPatchApprovalRequestEvent;
 use codex_protocol::protocol::AskForApproval;
 use codex_protocol::protocol::CodexErrorInfo;
+use codex_protocol::protocol::ContextWindowUsage;
 use codex_protocol::protocol::DeprecationNoticeEvent;
 use codex_protocol::protocol::Event;
 use codex_protocol::protocol::EventMsg;
@@ -401,7 +402,6 @@ use codex_protocol::protocol::StreamErrorEvent;
 use codex_protocol::protocol::ThreadMemoryMode;
 use codex_protocol::protocol::TokenCountEvent;
 use codex_protocol::protocol::TokenUsage;
-use codex_protocol::protocol::ContextWindowUsage;
 use codex_protocol::protocol::TokenUsageInfo;
 use codex_protocol::protocol::TokenUsageRecord;
 use codex_protocol::protocol::TurnModerationMetadataEvent;
@@ -5570,23 +5570,23 @@ impl Session {
             let state = self.state.lock().await;
             let (mut info, rate_limits) = state.token_info_and_rate_limits();
             if let Some(info) = &mut info {
-                info.context_window_usage = (!crate::compact::automatic_compaction_configured(
-                    turn_context,
-                ) || self
-                    .services
-                    .thread_extension_data
-                    .get::<crate::compact::AutoCompactionDisabled>()
-                    .is_some())
-                .then(|| turn_context.model_context_window())
-                .flatten()
-                .map(|context_window| ContextWindowUsage {
-                    used_tokens: if exhausted {
-                        context_window
-                    } else {
-                        state.get_reported_token_usage()
-                    },
-                    context_window,
-                });
+                info.context_window_usage =
+                    (!crate::compact::automatic_compaction_configured(turn_context)
+                        || self
+                            .services
+                            .thread_extension_data
+                            .get::<crate::compact::AutoCompactionDisabled>()
+                            .is_some())
+                    .then(|| turn_context.model_context_window())
+                    .flatten()
+                    .map(|context_window| ContextWindowUsage {
+                        used_tokens: if exhausted {
+                            context_window
+                        } else {
+                            state.get_reported_token_usage()
+                        },
+                        context_window,
+                    });
             }
             (info, rate_limits)
         };
