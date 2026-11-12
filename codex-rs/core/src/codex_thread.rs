@@ -24,6 +24,7 @@ use codex_exec_server::SelectedCapabilityRootsStatus;
 use codex_extension_api::ConversationHistorySnapshot;
 use codex_extension_api::ThreadIdleCause;
 use codex_features::Feature;
+use codex_history::CompactionContextPause;
 use codex_history::RolloutItem;
 use codex_otel::SessionTelemetry;
 use codex_otel::current_span_w3c_trace_context;
@@ -905,6 +906,10 @@ impl CodexThread {
     /// `thread/tokenUsage/updated` payload incomplete.
     pub async fn token_usage_info(&self) -> Option<TokenUsageInfo> {
         self.session.token_usage_info().await
+    }
+
+    pub async fn waiting_context_pause(&self) -> Option<CompactionContextPause> {
+        crate::session::context_pause::waiting_context_pause(&self.session).await
     }
 
     /// Records a context fragment without creating a new user turn boundary.

@@ -41,8 +41,12 @@ use test_case::test_case;
 
 use super::image_rollout::RecordingFileAttachmentStore;
 
+#[test_case(true; "default compaction")]
+#[test_case(false; "no auto compact")]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn independent_review_preserves_oversized_instruction_order() -> Result<()> {
+async fn independent_review_preserves_oversized_instruction_order(
+    auto_compact_enabled: bool,
+) -> Result<()> {
     skip_if_no_network!(Ok(()));
     skip_if_wine_exec!(
         Ok(()),
@@ -57,13 +61,14 @@ async fn independent_review_preserves_oversized_instruction_order() -> Result<()
         .with_model_info_override("gpt-5.5", |model| {
             model.auto_review_model_override = Some("gpt-5.6-luna".to_owned());
         })
-        .with_config(|config| {
+        .with_config(move |config| {
             config
                 .features
                 .disable(Feature::GuardianReuseParentCompaction)
                 .expect("review the legacy transcript rather than the opaque checkpoint");
             config.permissions.approval_policy = Constrained::allow_any(AskForApproval::OnRequest);
             config.approvals_reviewer = ApprovalsReviewer::AutoReview;
+            config.model_auto_compact_enabled = auto_compact_enabled;
             config.model_auto_compact_token_limit = Some(1_000_000);
         })
         .build_with_auto_env(&server)

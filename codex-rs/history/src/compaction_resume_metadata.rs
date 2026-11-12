@@ -3,6 +3,7 @@
 use crate::RolloutItem;
 use codex_protocol::ThreadId;
 use codex_protocol::dynamic_tools::DynamicToolSpec;
+use codex_protocol::protocol::ContextPause;
 use codex_protocol::protocol::MultiAgentVersion;
 use codex_protocol::turn_input::CyberAccessProgram;
 use codex_protocol::turn_input::TurnAttribution;
@@ -27,6 +28,18 @@ pub struct CompactionResumeMetadata {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub turn_attribution: Option<TurnAttribution>,
     pub previous_turn_settings: Option<PreviousTurnSettings>,
+    /// Context pause checkpoint owned by the thread that wrote the compaction.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context_pause: Option<CompactionContextPause>,
+}
+
+/// Once-per-thread pause state carried across a compaction boundary.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct CompactionContextPause {
+    pub thread_id: ThreadId,
+    pub waiting_for_user: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub details: Option<ContextPause>,
 }
 
 /// A thread's dynamic-tool catalog, including an empty catalog after a clear.

@@ -46,6 +46,7 @@ fn thread_settings_for_test(
 
 fn configured_thread_session(thread_id: ThreadId) -> crate::session_state::ThreadSessionState {
     crate::session_state::ThreadSessionState {
+        waiting_context_pause: None,
         daybreak_enabled: false,
         windows_sandbox_host: crate::app::WindowsSandboxHost::Local,
         thread_id,
@@ -224,6 +225,7 @@ fn start_safety_buffering_test_turn(
         ServerNotification::TurnStarted(TurnStartedNotification {
             thread_id: thread_id.to_string(),
             turn: AppServerTurn {
+                context_pause: None,
                 id: turn_id.to_string(),
                 root_turn_id: None,
                 items_view: codex_app_server_protocol::TurnItemsView::Full,
@@ -359,6 +361,58 @@ async fn safety_buffering_offers_one_retry_with_app_wording() {
         !render_bottom_popup(&chat, /*width*/ 80)
             .contains("Press enter to confirm or esc to go back")
     );
+}
+
+#[tokio::test]
+async fn fixed_session_model_keeps_buffered_turn_running() {
+    let (mut chat, _rx, mut op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+    chat.local_settings.model_switching_enabled = false;
+    let model = chat.current_model().to_string();
+    let (thread_id, turn_id, _) = start_safety_buffering_test_turn(&mut chat, &mut op_rx);
+
+    chat.handle_server_notification(
+        ServerNotification::ModelSafetyBufferingUpdated(safety_buffering_notification(
+            thread_id,
+            turn_id,
+            Some("faster-model"),
+        )),
+        /*replay_kind*/ None,
+    );
+
+    assert!(chat.turn_lifecycle.agent_turn_running);
+    assert!(chat.bottom_pane.no_modal_or_popup_active());
+    assert!(!chat.can_retry_safety_buffered_turn(turn_id));
+    assert_eq!(chat.current_model(), model);
+    assert!(op_rx.try_recv().is_err());
+}
+
+#[tokio::test]
+async fn fixed_session_model_survives_plan_mode_changes() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+    chat.local_settings.model_switching_enabled = false;
+    let model = chat.current_model().to_string();
+
+    chat.set_model("different-model");
+    assert_eq!(chat.current_model(), model);
+
+    let mut mask = chat.active_collaboration_mask.clone().unwrap();
+    mask.mode = Some(ModeKind::Plan);
+    mask.model = Some("different-plan-model".to_string());
+    chat.set_collaboration_mask(mask);
+    assert_eq!(
+        (chat.current_model(), chat.active_mode_kind()),
+        (model.as_str(), ModeKind::Plan),
+    );
+}
+
+#[tokio::test]
+async fn fixed_session_model_keeps_model_picker_closed() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+    chat.local_settings.model_switching_enabled = false;
+    chat.open_model_popup();
+    assert!(chat.bottom_pane.no_modal_or_popup_active());
+    chat.open_all_models_popup();
+    assert!(chat.bottom_pane.no_modal_or_popup_active());
 }
 
 #[tokio::test]
@@ -942,6 +996,7 @@ async fn live_app_server_turn_completed_clears_working_status_after_answer_item(
         ServerNotification::TurnStarted(TurnStartedNotification {
             thread_id: "thread-1".to_string(),
             turn: AppServerTurn {
+                context_pause: None,
                 id: "turn-1".to_string(),
                 root_turn_id: None,
                 items_view: codex_app_server_protocol::TurnItemsView::Full,
@@ -991,6 +1046,7 @@ async fn live_app_server_turn_completed_clears_working_status_after_answer_item(
         ServerNotification::TurnCompleted(TurnCompletedNotification {
             thread_id: "thread-1".to_string(),
             turn: AppServerTurn {
+                context_pause: None,
                 id: "turn-1".to_string(),
                 root_turn_id: None,
                 items_view: codex_app_server_protocol::TurnItemsView::Summary,
@@ -1029,6 +1085,7 @@ async fn live_app_server_turn_started_sets_feedback_turn_id() {
         ServerNotification::TurnStarted(TurnStartedNotification {
             thread_id: "thread-1".to_string(),
             turn: AppServerTurn {
+                context_pause: None,
                 id: "turn-1".to_string(),
                 root_turn_id: None,
                 items_view: codex_app_server_protocol::TurnItemsView::Full,
@@ -1660,6 +1717,7 @@ async fn live_app_server_failed_turn_does_not_duplicate_error_history() {
         ServerNotification::TurnStarted(TurnStartedNotification {
             thread_id: "thread-1".to_string(),
             turn: AppServerTurn {
+                context_pause: None,
                 id: "turn-1".to_string(),
                 root_turn_id: None,
                 items_view: codex_app_server_protocol::TurnItemsView::Full,
@@ -1696,6 +1754,7 @@ async fn live_app_server_failed_turn_does_not_duplicate_error_history() {
         ServerNotification::TurnCompleted(TurnCompletedNotification {
             thread_id: "thread-1".to_string(),
             turn: AppServerTurn {
+                context_pause: None,
                 id: "turn-1".to_string(),
                 root_turn_id: None,
                 items_view: codex_app_server_protocol::TurnItemsView::Full,
@@ -1870,6 +1929,7 @@ async fn live_app_server_stream_recovery_restores_previous_status_header() {
         ServerNotification::TurnStarted(TurnStartedNotification {
             thread_id: "thread-1".to_string(),
             turn: AppServerTurn {
+                context_pause: None,
                 id: "turn-1".to_string(),
                 root_turn_id: None,
                 items_view: codex_app_server_protocol::TurnItemsView::Full,
@@ -1957,6 +2017,7 @@ async fn live_app_server_server_overloaded_error_renders_error() {
             ServerNotification::TurnStarted(TurnStartedNotification {
                 thread_id: "thread-1".to_string(),
                 turn: AppServerTurn {
+                    context_pause: None,
                     id: "turn-1".to_string(),
                     root_turn_id: None,
                     items_view: codex_app_server_protocol::TurnItemsView::Full,
@@ -2009,6 +2070,7 @@ async fn live_app_server_cyber_policy_error_renders_dedicated_notice() {
         ServerNotification::TurnStarted(TurnStartedNotification {
             thread_id: "thread-1".to_string(),
             turn: AppServerTurn {
+                context_pause: None,
                 id: "turn-1".to_string(),
                 root_turn_id: None,
                 items_view: codex_app_server_protocol::TurnItemsView::Full,

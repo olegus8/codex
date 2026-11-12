@@ -1131,6 +1131,23 @@ class ContextCompactedNotification(BaseModel):
     turn_id: Annotated[str, Field(alias="turnId")]
 
 
+class ContextPause(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+    context_window: Annotated[int, Field(alias="contextWindow")]
+    threshold_percent: Annotated[int, Field(alias="thresholdPercent", ge=0)]
+    used_tokens: Annotated[int, Field(alias="usedTokens")]
+
+
+class ContextWindowUsage(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+    context_window: Annotated[int, Field(alias="contextWindow")]
+    used_tokens: Annotated[int, Field(alias="usedTokens")]
+
+
 class ConversationTextRole(Enum):
     user = "user"
     developer = "developer"
@@ -6836,6 +6853,16 @@ class Verbosity(Enum):
     high = "high"
 
 
+class WaitingContextPause(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+    details: Annotated[
+        ContextPause | None,
+        Field(description="Absent when restored from a checkpoint that predates pause details."),
+    ] = None
+
+
 class WarningNotification(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
@@ -10966,6 +10993,13 @@ class ThreadTokenUsage(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
     )
+    context_window_usage: Annotated[
+        ContextWindowUsage | None,
+        Field(
+            alias="contextWindowUsage",
+            description="Runtime usage against the usable limit when automatic compaction is disabled.",
+        ),
+    ] = None
     last: TokenUsageBreakdown
     model_context_window: Annotated[int | None, Field(alias="modelContextWindow")] = None
     total: TokenUsageBreakdown
@@ -12237,6 +12271,7 @@ class TurnCompletedThreadTimelineEntry(BaseModel):
         populate_by_name=True,
     )
     completed_at: int | None = None
+    context_pause: ContextPause | None = None
     duration_ms: int | None = None
     error: TurnError | None = None
     position: Annotated[int, Field(ge=0)]
@@ -12272,6 +12307,10 @@ class Turn(BaseModel):
         Field(
             alias="completedAt", description="Unix timestamp (in seconds) when the turn completed."
         ),
+    ] = None
+    context_pause: Annotated[
+        ContextPause | None,
+        Field(alias="contextPause", description="The pause that ended this turn, if one occurred."),
     ] = None
     duration_ms: Annotated[
         int | None,
@@ -12938,6 +12977,13 @@ class ThreadForkResponse(BaseModel):
     ]
     service_tier: Annotated[str | None, Field(alias="serviceTier")] = None
     thread: Thread
+    waiting_context_pause: Annotated[
+        WaitingContextPause | None,
+        Field(
+            alias="waitingContextPause",
+            description="Context pause currently waiting for user input in the fork.",
+        ),
+    ] = None
 
 
 class ThreadListResponse(BaseModel):
@@ -13033,6 +13079,13 @@ class ThreadResumeResponse(BaseModel):
         Field(
             alias="turnsBackwardsCursor",
             description='Opaque cursor for hydrating paginated turns backwards.\n\nPass this as `cursor` to `thread/turns/list` with `sortDirection: "desc"`. The first page includes the turn identified by the cursor.',
+        ),
+    ] = None
+    waiting_context_pause: Annotated[
+        WaitingContextPause | None,
+        Field(
+            alias="waitingContextPause",
+            description="Context pause currently waiting for user input.",
         ),
     ] = None
 

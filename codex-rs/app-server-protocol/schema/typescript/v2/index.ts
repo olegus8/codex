@@ -123,6 +123,8 @@ export type { ConsumeAccountRateLimitResetCreditOutcome } from "./ConsumeAccount
 export type { ConsumeAccountRateLimitResetCreditParams } from "./ConsumeAccountRateLimitResetCreditParams";
 export type { ConsumeAccountRateLimitResetCreditResponse } from "./ConsumeAccountRateLimitResetCreditResponse";
 export type { ContextCompactedNotification } from "./ContextCompactedNotification";
+export type { ContextPause } from "./ContextPause";
+export type { ContextWindowUsage } from "./ContextWindowUsage";
 export type { CreditsSnapshot } from "./CreditsSnapshot";
 export type { CyberAccessProgram } from "./CyberAccessProgram";
 export type { DeprecationNoticeNotification } from "./DeprecationNoticeNotification";
@@ -650,6 +652,7 @@ export type { TurnSteerResponse } from "./TurnSteerResponse";
 export type { TurnToolOutput } from "./TurnToolOutput";
 export type { TurnsPage } from "./TurnsPage";
 export type { UserInput } from "./UserInput";
+export type { WaitingContextPause } from "./WaitingContextPause";
 export type { WarningNotification } from "./WarningNotification";
 export type { WebSearchAction } from "./WebSearchAction";
 export type { WindowsSandboxImplementation } from "./WindowsSandboxImplementation";

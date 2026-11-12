@@ -35,6 +35,7 @@ pub(in crate::app) fn user_cell(message: &str) -> Arc<dyn HistoryCell> {
 
 pub(in crate::app) fn attach_thread(app: &mut App, thread_id: ThreadId) {
     app.chat_widget.handle_thread_session(ThreadSessionState {
+        waiting_context_pause: None,
         daybreak_enabled: false,
         windows_sandbox_host: crate::app::WindowsSandboxHost::Local,
         thread_id,
@@ -749,6 +750,7 @@ async fn owned_details_escape_interrupts_work_without_starting_backtrack() -> Re
         ServerNotification::TurnStarted(codex_app_server_protocol::TurnStartedNotification {
             thread_id: thread_id.to_string(),
             turn: codex_app_server_protocol::Turn {
+                context_pause: None,
                 id: "active-turn".to_string(),
                 root_turn_id: None,
                 items_view: codex_app_server_protocol::TurnItemsView::Full,
