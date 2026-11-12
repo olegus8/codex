@@ -1543,8 +1543,6 @@ async fn run_pre_sampling_compact(
     Ok(())
 }
 
-/// Returns true only when both turns declare compaction compatibility hashes and they differ.
-/// A missing hash does not provide enough information to trigger compaction.
 async fn finish_context_paused_turn(
     sess: &Arc<Session>,
     step_context: &Arc<StepContext>,
@@ -1577,6 +1575,8 @@ async fn finish_context_paused_turn(
     .await;
 }
 
+/// Returns true when both turns declare different compaction hashes.
+/// A missing hash does not provide enough information to trigger compaction.
 fn comp_hash_changed(previous: Option<&str>, current: Option<&str>) -> bool {
     previous
         .zip(current)

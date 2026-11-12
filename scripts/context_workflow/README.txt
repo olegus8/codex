@@ -1,6 +1,5 @@
 Requires Linux, Python 3.11+, bubblewrap and util-linux script.
 Keep the matching code-mode host and hashed bwrap beside the Codex binary.
-Use development builds for the candidate and its unmodified base.
 
 Run scripts/context_workflow/check.py. Set --binary to the compiled
 client, --out to a new results directory, --requirements to the managed
