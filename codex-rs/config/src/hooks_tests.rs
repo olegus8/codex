@@ -210,6 +210,7 @@ command = "python3 /tmp/pre.py"
     assert_eq!(
         parsed,
         HooksToml {
+            required_admission: Vec::new(),
             events: HookEventsToml {
                 pre_tool_use: vec![MatcherGroup {
                     matcher: Some("^Bash$".to_string()),

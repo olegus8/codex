@@ -990,7 +990,54 @@ impl UnifiedExecProcessManager {
                 .map_err(UnifiedExecError::StdinApproval)?;
         }
 
-        // Revalidate the identity after approval: a removed process ID can be reused.
+        if !request.input.is_empty() {
+            let outcome = crate::hook_runtime::run_pre_tool_use_hooks_with_native(
+                &context.session,
+                &context.step_context,
+                context.call_id.clone(),
+                &crate::tools::hook_names::HookToolName::new("NativeDispatch"),
+                &serde_json::json!({"chars": request.input, "session_id": process_id}),
+                None,
+                &[request.terminal.environment_id.as_str()],
+                Some(serde_json::json!({
+                    "thread_id": context.session.thread_id,
+                    "turn_id": context.step_context.turn.sub_id,
+                    "call_id": context.call_id,
+                    "tool_name": "write_stdin",
+                    "operation": {
+                        "kind": "terminal", "action": "write_stdin",
+                        "session_id": process_id,
+                        "instance_id": locked_process.instance_id,
+                        "original_call_id": request.terminal.call_id,
+                        "environment_id": request.terminal.environment_id,
+                        "input": request.input,
+                    },
+                })),
+            )
+            .await;
+            match outcome {
+                crate::hook_runtime::PreToolUseHookResult::Continue {
+                    updated_input: None,
+                } => {}
+                crate::hook_runtime::PreToolUseHookResult::Continue {
+                    updated_input: Some(_),
+                } => {
+                    return Err(UnifiedExecError::StdinApproval(ToolError::Rejected(
+                        "resolved terminal input cannot be rewritten".into(),
+                    )));
+                }
+                crate::hook_runtime::PreToolUseHookResult::Blocked(reason) => {
+                    return Err(UnifiedExecError::StdinApproval(ToolError::Rejected(reason)));
+                }
+            }
+            if context.cancellation_token.is_cancelled() {
+                return Err(UnifiedExecError::StdinApproval(ToolError::Rejected(
+                    "terminal input was cancelled".into(),
+                )));
+            }
+        }
+
+        // Revalidate after approval and hooks: a removed ID can be reused.
         let PreparedProcessHandles {
             process,
             output,

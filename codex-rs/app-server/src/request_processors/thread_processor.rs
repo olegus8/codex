@@ -907,6 +907,26 @@ impl ThreadRequestProcessor {
             .map(|response| Some(response.into()))
     }
 
+    pub(crate) async fn native_tool_admission(
+        &self,
+        params: codex_app_server_protocol::NativeToolAdmissionParams,
+    ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
+        let id = ThreadId::from_string(&params.thread_id)
+            .map_err(|error| invalid_request(error.to_string()))?;
+        let thread = self
+            .thread_manager
+            .get_thread(id)
+            .await
+            .map_err(|error| invalid_request(error.to_string()))?;
+        thread
+            .admit_tool_dispatch(&params.call_id, params.operation)
+            .await
+            .map_err(invalid_request)?;
+        Ok(Some(
+            codex_app_server_protocol::NativeToolAdmissionResponse {}.into(),
+        ))
+    }
+
     pub(crate) async fn thread_background_terminals_terminate(
         &self,
         params: ThreadBackgroundTerminalsTerminateParams,

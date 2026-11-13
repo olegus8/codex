@@ -53,6 +53,7 @@ impl ToolExecutor<ToolInvocation> for Handler {
 async fn handle_spawn_agent(
     invocation: ToolInvocation,
 ) -> Result<SpawnAgentResult, FunctionCallError> {
+    let native_call = invocation.clone();
     let ToolInvocation {
         session,
         step_context,
@@ -110,6 +111,15 @@ async fn handle_spawn_agent(
     .map_err(FunctionCallError::RespondToModel)?;
     let config = prepared.config;
     let fork_mode = args.fork_context.then_some(SpawnAgentForkMode::FullHistory);
+    crate::native_admission::admit(
+        &native_call,
+        serde_json::json!({
+            "kind": "agent", "action": "spawn", "parent_thread_id": session.thread_id,
+            "cwd": config.cwd, "model": config.model,
+            "fork": args.fork_context,
+        }),
+    )
+    .await?;
     let result = session
         .services
         .agent_control

@@ -281,6 +281,8 @@ impl ServerHandler for DynamicToolMcpHandler {
         request: CallToolRequestParams,
         context: RequestContext<RoleServer>,
     ) -> Result<rmcp::model::CallToolResponse, McpError> {
+        let requires_native_identity =
+            dynamic_tools::DELEGATION_TOOLS.contains(&request.name.as_ref());
         let metadata = &context.meta.0.0;
         let turn_metadata = metadata
             .get("x-codex-turn-metadata")
@@ -299,11 +301,17 @@ impl ServerHandler for DynamicToolMcpHandler {
             .get("turnId")
             .and_then(Value::as_str)
             .or_else(|| turn_metadata.as_ref()?.get("turn_id")?.as_str())
-            .map_or_else(|| format!("mcp-turn-{}", Uuid::new_v4()), str::to_string);
+            .filter(|id| !id.is_empty())
+            .map(str::to_string)
+            .or_else(|| (!requires_native_identity).then(|| format!("mcp-turn-{}", Uuid::new_v4())))
+            .ok_or_else(|| McpError::invalid_params("missing native turn identity", None))?;
         let call_id = metadata
             .get("callId")
             .and_then(Value::as_str)
-            .map_or_else(|| format!("mcp-call-{}", Uuid::new_v4()), str::to_string);
+            .filter(|id| !id.is_empty())
+            .map(str::to_string)
+            .or_else(|| (!requires_native_identity).then(|| format!("mcp-call-{}", Uuid::new_v4())))
+            .ok_or_else(|| McpError::invalid_params("missing native call identity", None))?;
         let params = DynamicToolCallParams {
             thread_id: thread_id.to_string(),
             turn_id,

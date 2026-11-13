@@ -26,6 +26,7 @@
     "model": {
       "type": "string"
     },
+    "native_dispatch": true,
     "permission_mode": {
       "enum": [
         "default",

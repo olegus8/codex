@@ -278,6 +278,7 @@ pub(crate) struct ClaudeHooksEngine {
     pub(crate) enabled: bool,
     // Per-turn views share configuration; executor overlays copy handlers on mutation.
     pub(crate) handlers: Arc<Vec<ConfiguredHandler>>,
+    pub(crate) required_admission: Arc<Vec<(HookMatcher, String)>>,
     /// Retain the session inventory without copying it for every hook dispatch.
     pub(crate) hook_entries: Arc<Vec<HookListEntry>>,
     pub(crate) warnings: Arc<[String]>,
@@ -296,13 +297,51 @@ impl ClaudeHooksEngine {
         command_runtime: CommandHookRuntime,
         mcp_executor: Arc<dyn HookMcpExecutor>,
     ) -> Self {
+        let mut required_admission = Vec::new();
+        let mut admission_errors = Vec::new();
+        if let Some(stack) = config_layer_stack {
+            for layer in stack.layers_low_to_high() {
+                if let Some(value) = layer
+                    .config
+                    .get("hooks")
+                    .and_then(|hooks| hooks.get("required_admission"))
+                {
+                    match value
+                        .clone()
+                        .try_into::<Vec<codex_config::RequiredHookAdmission>>()
+                    {
+                        Ok(requirements) => {
+                            for requirement in requirements {
+                                match HookMatcher::new(&requirement.matcher) {
+                                    Ok(matcher) if !requirement.hook.trim().is_empty() => {
+                                        required_admission.push((matcher, requirement.hook))
+                                    }
+                                    Ok(_) => admission_errors
+                                        .push("required admission hook key is empty".into()),
+                                    Err(error) => admission_errors.push(format!(
+                                        "invalid required admission matcher: {error}"
+                                    )),
+                                }
+                            }
+                        }
+                        Err(error) => {
+                            admission_errors.push(format!("invalid required admission: {error}"))
+                        }
+                    }
+                }
+            }
+        }
+        if !admission_errors.is_empty() {
+            required_admission.push((HookMatcher::All("*".into()), String::new()));
+        }
         if !enabled && plugin_hook_sources.is_empty() {
             return Self {
                 enabled,
                 handlers: Arc::default(),
+                required_admission: Arc::new(required_admission),
                 hook_entries: Arc::default(),
                 warnings: Arc::default(),
-                required_load_errors: Arc::default(),
+                required_load_errors: admission_errors.into(),
                 command_runtime,
                 mcp_executor,
             };
@@ -326,9 +365,14 @@ impl ClaudeHooksEngine {
         Self {
             enabled,
             handlers: Arc::new(discovered.handlers),
+            required_admission: Arc::new(required_admission),
             hook_entries: Arc::new(discovered.hook_entries),
             warnings: discovered.warnings.into(),
-            required_load_errors: discovered.required_load_errors.into(),
+            required_load_errors: discovered
+                .required_load_errors
+                .into_iter()
+                .chain(admission_errors)
+                .collect(),
             command_runtime,
             mcp_executor,
         }

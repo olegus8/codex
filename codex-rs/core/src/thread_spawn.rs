@@ -95,6 +95,7 @@ pub enum ThreadSpawnError {
 }
 
 pub(crate) async fn spawn(
+    native_call: &crate::tools::context::ToolInvocation,
     session: &Session,
     step_context: &StepContext,
     call_id: &str,
@@ -102,6 +103,16 @@ pub(crate) async fn spawn(
 ) -> Result<ThreadSpawnResult, ThreadSpawnError> {
     let (request, message) = request.into_parts()?;
     let (settings, task_name) = prepare(session, step_context, call_id, request).await?;
+    crate::native_admission::admit(
+        native_call,
+        serde_json::json!({
+            "kind": "agent", "action": "spawn", "parent_thread_id": session.thread_id,
+            "agent_path": task_name, "cwd": settings.config.cwd,
+            "model": settings.config.model,
+        }),
+    )
+    .await
+    .map_err(|error| ThreadSpawnError::Preparation(error.to_string()))?;
     let request = SpawnRequest {
         caller: session.thread_id,
         config: settings.config,

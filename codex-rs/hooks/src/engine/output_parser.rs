@@ -19,6 +19,7 @@ pub(crate) struct PreToolUseOutput {
     pub additional_context: Option<String>,
     pub updated_input: Option<serde_json::Value>,
     pub invalid_reason: Option<String>,
+    pub admitted: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -119,6 +120,14 @@ fn session_start_output(
 }
 
 pub(crate) fn parse_pre_tool_use(stdout: &str) -> Option<PreToolUseOutput> {
+    parse_pre_tool_use_with_admission(stdout, false)
+}
+
+pub(crate) fn parse_required_pre_tool_use(stdout: &str) -> Option<PreToolUseOutput> {
+    parse_pre_tool_use_with_admission(stdout, true)
+}
+
+fn parse_pre_tool_use_with_admission(stdout: &str, required: bool) -> Option<PreToolUseOutput> {
     let PreToolUseCommandOutputWire {
         universal: universal_wire,
         decision,
@@ -136,7 +145,19 @@ pub(crate) fn parse_pre_tool_use(stdout: &str) -> Option<PreToolUseOutput> {
     });
     let invalid_reason = unsupported_pre_tool_use_universal(&universal).or_else(|| {
         if use_hook_specific_decision {
-            hook_specific_output.and_then(unsupported_pre_tool_use_hook_specific_output)
+            hook_specific_output.and_then(|output| {
+                if required
+                    && output.updated_input.is_none()
+                    && matches!(
+                        output.permission_decision,
+                        Some(PreToolUsePermissionDecisionWire::Allow)
+                    )
+                {
+                    None
+                } else {
+                    unsupported_pre_tool_use_hook_specific_output(output)
+                }
+            })
         } else {
             unsupported_pre_tool_use_legacy_decision(decision.as_ref(), reason.as_deref())
         }
@@ -178,6 +199,12 @@ pub(crate) fn parse_pre_tool_use(stdout: &str) -> Option<PreToolUseOutput> {
         additional_context,
         updated_input,
         invalid_reason,
+        admitted: hook_specific_output.is_some_and(|output| {
+            matches!(
+                output.permission_decision,
+                Some(PreToolUsePermissionDecisionWire::Allow)
+            )
+        }),
     })
 }
 

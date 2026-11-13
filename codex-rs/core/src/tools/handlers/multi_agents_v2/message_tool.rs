@@ -47,6 +47,7 @@ pub(super) async fn handle_message_string_tool(
     analytics: &mut ToolCallAnalytics,
 ) -> Result<FunctionToolOutput, FunctionCallError> {
     let message = message_content(message)?;
+    let native_call = invocation.clone();
     let ToolInvocation {
         session,
         turn,
@@ -58,6 +59,17 @@ pub(super) async fn handle_message_string_tool(
     analytics.set_receiver(receiver_thread_id);
     let resume_config =
         build_agent_resume_config(&turn).map_err(FunctionCallError::RespondToModel)?;
+    crate::native_admission::admit_agent(
+        &native_call,
+        if mode == MessageDeliveryMode::TriggerTurn {
+            "followup"
+        } else {
+            "message"
+        },
+        &target,
+        receiver_thread_id,
+    )
+    .await?;
     let receipt = session
         .services
         .agent_control

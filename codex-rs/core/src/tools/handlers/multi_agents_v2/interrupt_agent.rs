@@ -34,6 +34,7 @@ async fn handle_interrupt_agent(
     invocation: ToolInvocation,
     analytics: &mut ToolCallAnalytics,
 ) -> Result<InterruptAgentResult, FunctionCallError> {
+    let native_call = invocation.clone();
     let ToolInvocation {
         session,
         turn,
@@ -45,6 +46,7 @@ async fn handle_interrupt_agent(
     let args: InterruptAgentArgs = parse_arguments(&arguments)?;
     let agent_id = resolve_agent_target(&session, &turn, &args.target).await?;
     analytics.set_receiver(agent_id);
+    crate::native_admission::admit_agent(&native_call, "interrupt", &args.target, agent_id).await?;
     let snapshot = session
         .services
         .agent_control

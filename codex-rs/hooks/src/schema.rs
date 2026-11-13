@@ -277,6 +277,8 @@ pub(crate) enum PreToolUseDecisionWire {
 #[serde(deny_unknown_fields)]
 #[schemars(rename = "pre-tool-use.command.input")]
 pub(crate) struct PreToolUseCommandInput {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub native_dispatch: Option<Value>,
     pub session_id: String,
     /// Codex extension: expose the active turn id to internal turn-scoped hooks.
     pub turn_id: String,
@@ -1214,6 +1216,7 @@ mod tests {
             agent_type: "worker".to_string(),
         }));
         let input = PreToolUseCommandInput {
+            native_dispatch: None,
             session_id: "session-1".to_string(),
             turn_id: "turn-1".to_string(),
             agent_id: subagent.agent_id,
@@ -1247,6 +1250,7 @@ mod tests {
         );
 
         let root_input = PreToolUseCommandInput {
+            native_dispatch: None,
             session_id: "session-1".to_string(),
             turn_id: "turn-1".to_string(),
             agent_id: None,

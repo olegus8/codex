@@ -37,6 +37,8 @@ pub struct PreToolUseRequest {
     pub matcher_aliases: Vec<String>,
     pub tool_use_id: String,
     pub tool_input: Value,
+    /// Evidence supplied by a native effect dispatcher, outside model arguments.
+    pub native_dispatch: Option<Value>,
 }
 
 #[derive(Debug)]
@@ -54,6 +56,7 @@ struct PreToolUseHandlerData {
     block_reason: Option<String>,
     additional_contexts_for_model: Vec<AdditionalContext>,
     updated_input: Option<Value>,
+    admitted: bool,
 }
 
 pub(crate) fn preview(
@@ -83,11 +86,38 @@ pub(crate) async fn run(
         HookEventName::PreToolUse,
         &matcher_inputs,
     );
-    if matched.is_empty() {
+    let requirements = engine
+        .required_admission
+        .iter()
+        .filter(|(matcher, _)| {
+            matcher_inputs
+                .iter()
+                .any(|input| matcher.matches(Some(input)))
+        })
+        .map(|(_, key)| key)
+        .collect::<Vec<_>>();
+    let required = !requirements.is_empty();
+    let required_orders = engine
+        .hook_entries
+        .iter()
+        .filter(|entry| requirements.contains(&&entry.key))
+        .map(|entry| entry.display_order)
+        .collect::<std::collections::HashSet<_>>();
+    let missing_required = requirements.iter().any(|key| {
+        !engine.hook_entries.iter().any(|entry| {
+            &entry.key == *key
+                && matched.iter().any(|handler| {
+                    handler.display_order == entry.display_order
+                        && handler.can_apply_control_effects()
+                })
+        })
+    });
+    if matched.is_empty() || missing_required {
         return PreToolUseOutcome {
             hook_events: Vec::new(),
-            should_block: false,
-            block_reason: None,
+            should_block: required,
+            block_reason: required
+                .then(|| "required PreToolUse admission hook is missing".to_string()),
             additional_contexts: Vec::new(),
             updated_input: None,
         };
@@ -102,7 +132,13 @@ pub(crate) async fn run(
                 format!("failed to serialize pre tool use hook input: {error}"),
                 &request.tool_use_id,
             );
-            return serialization_failure_outcome(hook_events);
+            let mut outcome = serialization_failure_outcome(hook_events);
+            if required {
+                outcome.should_block = true;
+                outcome.block_reason =
+                    Some("required PreToolUse admission input could not be serialized".to_string());
+            }
+            return outcome;
         }
     };
 
@@ -112,14 +148,25 @@ pub(crate) async fn run(
         &input,
         request.cwd.as_path(),
         Some(request.turn_id.clone()),
-        parse_completed,
+        if required {
+            parse_required_completed
+        } else {
+            parse_completed
+        },
     )
     .await;
 
-    let should_block = results.iter().any(|result| result.data.should_block);
+    let admission_failed = required
+        && results.iter().any(|result| {
+            required_orders.contains(&result.completed.run.display_order) && !result.data.admitted
+        });
+    let should_block = admission_failed || results.iter().any(|result| result.data.should_block);
     let block_reason = results
         .iter()
-        .find_map(|result| result.data.block_reason.clone());
+        .find_map(|result| result.data.block_reason.clone())
+        .or_else(|| {
+            admission_failed.then(|| "required PreToolUse hook did not admit this call".to_string())
+        });
     let additional_contexts = common::flatten_additional_contexts(
         results
             .iter()
@@ -193,6 +240,7 @@ fn command_input(request: &PreToolUseRequest) -> Result<Value, serde_json::Error
         tool_name: request.tool_name.clone(),
         tool_input: request.tool_input.clone(),
         tool_use_id: request.tool_use_id.clone(),
+        native_dispatch: request.native_dispatch.clone(),
     })
 }
 
@@ -201,12 +249,30 @@ fn parse_completed(
     run_result: HandlerRunResult,
     turn_id: Option<String>,
 ) -> dispatcher::ParsedHandler<PreToolUseHandlerData> {
+    parse_completed_with_admission(handler, run_result, turn_id, false)
+}
+
+fn parse_required_completed(
+    handler: &ConfiguredHandler,
+    run_result: HandlerRunResult,
+    turn_id: Option<String>,
+) -> dispatcher::ParsedHandler<PreToolUseHandlerData> {
+    parse_completed_with_admission(handler, run_result, turn_id, true)
+}
+
+fn parse_completed_with_admission(
+    handler: &ConfiguredHandler,
+    run_result: HandlerRunResult,
+    turn_id: Option<String>,
+    required: bool,
+) -> dispatcher::ParsedHandler<PreToolUseHandlerData> {
     let mut entries = Vec::new();
     let mut status = HookRunStatus::Completed;
     let mut should_block = false;
     let mut block_reason = None;
     let mut additional_contexts_for_model = Vec::new();
     let mut updated_input = None;
+    let mut admitted = false;
 
     match run_result.error.as_deref() {
         Some(error) => {
@@ -220,7 +286,11 @@ fn parse_completed(
             Some(0) => {
                 let trimmed_stdout = run_result.stdout.trim();
                 if trimmed_stdout.is_empty() {
-                } else if let Some(parsed) = output_parser::parse_pre_tool_use(&run_result.stdout) {
+                } else if let Some(parsed) = if required {
+                    output_parser::parse_required_pre_tool_use(&run_result.stdout)
+                } else {
+                    output_parser::parse_pre_tool_use(&run_result.stdout)
+                } {
                     if let Some(system_message) = parsed.universal.system_message {
                         entries.push(HookOutputEntry {
                             kind: HookOutputEntryKind::Warning,
@@ -254,6 +324,7 @@ fn parse_completed(
                                 text: reason,
                             });
                         } else {
+                            admitted = parsed.admitted;
                             updated_input = parsed.updated_input;
                         }
                     }
@@ -311,6 +382,7 @@ fn parse_completed(
             block_reason,
             additional_contexts_for_model,
             updated_input,
+            admitted,
         },
         completion_order: 0,
     }
@@ -389,6 +461,7 @@ mod tests {
         assert_eq!(
             parsed.data,
             PreToolUseHandlerData {
+                admitted: false,
                 should_block: true,
                 block_reason: Some("do not run that".to_string()),
                 additional_contexts_for_model: Vec::new(),
@@ -420,6 +493,7 @@ mod tests {
         assert_eq!(
             parsed.data,
             PreToolUseHandlerData {
+                admitted: true,
                 should_block: false,
                 block_reason: None,
                 additional_contexts_for_model: Vec::new(),
@@ -471,6 +545,7 @@ mod tests {
         assert_eq!(
             parsed.data,
             PreToolUseHandlerData {
+                admitted: false,
                 should_block: false,
                 block_reason: None,
                 additional_contexts_for_model: Vec::new(),
@@ -517,6 +592,7 @@ mod tests {
         assert_eq!(
             parsed.data,
             PreToolUseHandlerData {
+                admitted: false,
                 should_block: true,
                 block_reason: Some("do not run that".to_string()),
                 additional_contexts_for_model: Vec::new(),
@@ -548,6 +624,7 @@ mod tests {
         assert_eq!(
             parsed.data,
             PreToolUseHandlerData {
+                admitted: false,
                 should_block: true,
                 block_reason: Some("do not run that".to_string()),
                 additional_contexts_for_model: vec![AdditionalContext {
@@ -588,6 +665,7 @@ mod tests {
         assert_eq!(
             parsed.data,
             PreToolUseHandlerData {
+                admitted: false,
                 should_block: false,
                 block_reason: None,
                 additional_contexts_for_model: Vec::new(),
@@ -615,6 +693,7 @@ mod tests {
         assert_eq!(
             parsed.data,
             PreToolUseHandlerData {
+                admitted: false,
                 should_block: false,
                 block_reason: None,
                 additional_contexts_for_model: Vec::new(),
@@ -648,6 +727,7 @@ mod tests {
         assert_eq!(
             parsed.data,
             PreToolUseHandlerData {
+                admitted: false,
                 should_block: true,
                 block_reason: Some("do not run that".to_string()),
                 additional_contexts_for_model: vec![AdditionalContext {
@@ -684,6 +764,7 @@ mod tests {
         assert_eq!(
             parsed.data,
             PreToolUseHandlerData {
+                admitted: false,
                 should_block: false,
                 block_reason: None,
                 additional_contexts_for_model: Vec::new(),
@@ -705,6 +786,7 @@ mod tests {
         assert_eq!(
             parsed.data,
             PreToolUseHandlerData {
+                admitted: false,
                 should_block: false,
                 block_reason: None,
                 additional_contexts_for_model: Vec::new(),
@@ -732,6 +814,7 @@ mod tests {
         assert_eq!(
             parsed.data,
             PreToolUseHandlerData {
+                admitted: false,
                 should_block: true,
                 block_reason: Some("blocked by policy".to_string()),
                 additional_contexts_for_model: Vec::new(),
@@ -827,6 +910,7 @@ mod tests {
 
     fn request_for_tool_use(tool_use_id: &str) -> super::PreToolUseRequest {
         super::PreToolUseRequest {
+            native_dispatch: None,
             session_id: ThreadId::new(),
             turn_id: "turn-1".to_string(),
             subagent: None,

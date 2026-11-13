@@ -223,6 +223,32 @@ pub struct BackgroundTerminalInfo {
 /// Conduit for the bidirectional stream of messages that compose a thread
 /// (formerly called a conversation) in Codex.
 impl CodexThread {
+    /// Runs admission in the originating live invocation, never a transport's
+    /// most recently active thread.
+    pub async fn admit_tool_dispatch(
+        &self,
+        call_id: &str,
+        operation: serde_json::Value,
+    ) -> Result<(), String> {
+        let call = self
+            .session
+            .native_tool_calls
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(call_id)
+            .and_then(std::sync::Weak::upgrade);
+        let Some(call) = call else {
+            return if self.session.hooks().requires_admission("NativeDispatch") {
+                Err("native tool invocation is no longer active".into())
+            } else {
+                Ok(())
+            };
+        };
+        call.admit_external(operation)
+            .await
+            .map_err(|error| error.to_string())
+    }
+
     pub(crate) fn new(
         session: Arc<Session>,
         io: SessionIo,

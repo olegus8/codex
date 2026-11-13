@@ -141,6 +141,249 @@ fn response_json(response: DynamicToolCallResponse) -> Value {
     serde_json::from_str(text).expect("dynamic tool response should contain JSON")
 }
 
+#[cfg(unix)]
+#[tokio::test]
+async fn native_admission_gates_actual_tui_task_dispatch() -> color_eyre::Result<()> {
+    for (tool, decision, via_mcp) in [
+        ("create_thread", "deny", false),
+        ("send_message_to_thread", "deny", false),
+        ("fork_thread", "deny", false),
+        ("fork_thread", "allow", false),
+        ("create_thread", "deny", true),
+        ("send_message_to_thread", "deny", true),
+        ("fork_thread", "deny", true),
+    ] {
+        let mock_server = responses::start_mock_server().await;
+        let home = tempfile::tempdir()?;
+        let hook = home.path().join("native_hook.py");
+        std::fs::write(
+            &hook,
+            format!(
+                r#"import json
+from pathlib import Path
+import sys
+value = json.load(sys.stdin)
+with (Path(__file__).parent / 'native.jsonl').open('a') as output:
+    output.write(json.dumps(value) + '\n')
+print(json.dumps({{'hookSpecificOutput': {{'hookEventName': 'PreToolUse', 'permissionDecision': '{decision}', 'permissionDecisionReason': 'native fixture denied'}}}}))
+"#
+            ),
+        )?;
+        let config_path = home.path().join("config.toml");
+        let key = format!("{}:pre_tool_use:0:0", config_path.display());
+        std::fs::write(
+            &config_path,
+            format!(
+                r#"
+model = "gpt-5.5"
+model_provider = "native-test"
+[model_providers.native-test]
+name = "Native dispatch fixture"
+base_url = "{}/v1"
+wire_api = "responses"
+request_max_retries = 0
+stream_max_retries = 0
+[hooks]
+required_admission = [{{ matcher = "NativeDispatch", hook = {} }}]
+[[hooks.PreToolUse]]
+matcher = "NativeDispatch"
+[[hooks.PreToolUse.hooks]]
+type = "command"
+command = {}
+"#,
+                mock_server.uri(),
+                serde_json::to_string(&key)?,
+                serde_json::to_string(&format!("python3 {}", hook.display()))?
+            ),
+        )?;
+        let mut config = ConfigBuilder::default()
+            .codex_home(home.path().to_path_buf())
+            .build()
+            .await?;
+        core_test_support::hooks::trust_discovered_hooks(&mut config);
+        std::fs::write(
+            &config_path,
+            toml::to_string(
+                &config
+                    .config_layer_stack
+                    .get_active_user_layer()
+                    .unwrap()
+                    .config,
+            )?,
+        )?;
+        let mut server = crate::start_embedded_app_server_for_picker(&config).await?;
+        let handle = server.request_handle();
+        let (app_events, _app_receiver) = tokio::sync::mpsc::unbounded_channel();
+        let (status_updates, _) = broadcast::channel(8);
+        let mut start_params = ThreadStartParams {
+            dynamic_tools: Some(tool_specs()),
+            ..Default::default()
+        };
+        let _mcp_server = if via_mcp {
+            let service = std::sync::Arc::new(
+                crate::dynamic_tools_mcp::DynamicToolMcpServer::start(
+                    handle.clone(),
+                    ThreadStartParams::default(),
+                    Features::with_defaults(),
+                    crate::app_event_sender::AppEventSender::new(app_events),
+                    status_updates,
+                    None,
+                    None,
+                )
+                .await?,
+            );
+            crate::dynamic_tools_mcp::ThreadToolTransport::Mcp(std::sync::Arc::clone(&service))
+                .configure(&mut start_params);
+            let settings = start_params
+                .config
+                .as_mut()
+                .unwrap()
+                .get_mut("mcp_servers.codex_tui")
+                .unwrap();
+            for tool in settings["tools"].as_object_mut().unwrap().values_mut() {
+                tool["approval_mode"] = json!("approve");
+            }
+            Some(service)
+        } else {
+            None
+        };
+        let started: codex_app_server_protocol::ThreadStartResponse =
+            request(&handle, |request_id| ClientRequest::ThreadStart {
+                request_id,
+                params: start_params,
+            })
+            .await
+            .map_err(color_eyre::eyre::Error::msg)?;
+        let source = started.thread.id;
+        let arguments = match tool {
+            "create_thread" => json!({"prompt": "fixture child"}),
+            "send_message_to_thread" => json!({"threadId": source, "prompt": "fixture message"}),
+            _ => json!({}),
+        };
+        let mock = responses::mount_sse_sequence(
+            &mock_server,
+            vec![
+                responses::sse(vec![
+                    responses::ev_response_created("native-call"),
+                    if via_mcp {
+                        responses::ev_function_call(
+                            "native-call-id",
+                            &format!("mcp__codex_tui__{tool}"),
+                            &arguments.to_string(),
+                        )
+                    } else {
+                        responses::ev_function_call_with_namespace(
+                            "native-call-id",
+                            NAMESPACE,
+                            tool,
+                            &arguments.to_string(),
+                        )
+                    },
+                    responses::ev_completed("native-call"),
+                ]),
+                responses::sse(vec![
+                    responses::ev_response_created("native-answer"),
+                    responses::ev_assistant_message("native-done", "fixture complete"),
+                    responses::ev_completed("native-answer"),
+                ]),
+            ],
+        )
+        .await;
+        let _: TurnStartResponse = request(&handle, |request_id| ClientRequest::TurnStart {
+            request_id,
+            params: TurnStartParams {
+                thread_id: source.clone(),
+                input: vec![UserInput::Text {
+                    text: "run fixture".into(),
+                    text_elements: Vec::new(),
+                }],
+                ..Default::default()
+            },
+        })
+        .await
+        .map_err(color_eyre::eyre::Error::msg)?;
+        let mut invoked = via_mcp;
+        tokio::time::timeout(Duration::from_secs(30), async {
+            while let Some(event) = server.next_event().await {
+                match event.event {
+                    codex_app_server_client::AppServerEvent::ServerRequest(request) => {
+                        if let codex_app_server_protocol::ServerRequest::DynamicToolCall {
+                            request_id,
+                            params,
+                        } = *request
+                        {
+                            let (_, status) = broadcast::channel(8);
+                            let response = execute(
+                                handle.clone(),
+                                params,
+                                ThreadStartParams {
+                                    dynamic_tools: Some(tool_specs()),
+                                    ..Default::default()
+                                },
+                                Features::with_defaults(),
+                                status,
+                                None,
+                            )
+                            .await;
+                            assert_eq!(
+                                response.success,
+                                decision == "allow",
+                                "{tool}: {response:?}"
+                            );
+                            invoked = true;
+                            server
+                                .resolve_server_request(request_id, serde_json::to_value(response)?)
+                                .await?;
+                        }
+                    }
+                    codex_app_server_client::AppServerEvent::ServerNotification(notification) => {
+                        if matches!(
+                            *notification,
+                            codex_app_server_protocol::ServerNotification::TurnCompleted(_)
+                        ) {
+                            return Ok::<_, color_eyre::eyre::Report>(());
+                        }
+                    }
+                    _ => panic!("lost native fixture connection"),
+                }
+            }
+            panic!("native fixture disconnected");
+        })
+        .await??;
+        assert!(invoked);
+        let loaded: codex_app_server_protocol::ThreadLoadedListResponse =
+            request(&handle, |request_id| ClientRequest::ThreadLoadedList {
+                request_id,
+                params: Default::default(),
+            })
+            .await
+            .map_err(color_eyre::eyre::Error::msg)?;
+        assert_eq!(loaded.data.len(), if decision == "allow" { 2 } else { 1 });
+        assert_eq!(mock.requests().len(), 2);
+        if decision == "deny" {
+            assert!(
+                mock.requests()[1]
+                    .function_call_output("native-call-id")
+                    .to_string()
+                    .contains("native fixture denied")
+            );
+        }
+        let calls: Vec<Value> = std::fs::read_to_string(home.path().join("native.jsonl"))?
+            .lines()
+            .map(serde_json::from_str)
+            .collect::<Result<_, _>>()?;
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0]["native_dispatch"]["thread_id"], source);
+        assert_eq!(
+            calls[0]["native_dispatch"]["operation"]["thread_id"],
+            source
+        );
+        assert_eq!(calls[0]["native_dispatch"]["operation"]["action"], tool);
+        server.shutdown().await?;
+    }
+    Ok(())
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn oversized_read_preserves_answer_in_next_model_request() -> color_eyre::Result<()> {
     let (_home, app_server, source, target) =

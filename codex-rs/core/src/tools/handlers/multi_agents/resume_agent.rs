@@ -33,6 +33,7 @@ impl ToolExecutor<ToolInvocation> for Handler {
 async fn handle_resume_agent(
     invocation: ToolInvocation,
 ) -> Result<ResumeAgentResult, FunctionCallError> {
+    let native_call = invocation.clone();
     let ToolInvocation {
         session,
         turn,
@@ -91,6 +92,8 @@ async fn handle_resume_agent(
             /*agent_role*/ None,
             /*task_name*/ None,
         )?;
+        crate::native_admission::admit_agent(&native_call, "resume", &args.id, receiver_thread_id)
+            .await?;
         local_agent_control
             .resume_agent(config, receiver_thread_id, source)
             .await

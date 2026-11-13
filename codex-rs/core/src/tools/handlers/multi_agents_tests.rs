@@ -128,6 +128,117 @@ fn function_payload(args: serde_json::Value) -> ToolPayload {
     }
 }
 
+#[cfg(unix)]
+#[tokio::test]
+async fn native_admission_denies_resolved_agent_dispatch_before_effects() {
+    let directory = tempfile::tempdir().unwrap();
+    let (mut session, mut turn) = make_session_and_context().await;
+    let manager = thread_manager();
+    let mut config = (*turn.config).clone();
+    config.features.enable(Feature::MultiAgentV2).unwrap();
+    set_turn_config(&mut turn, config);
+    let root = manager
+        .start_thread(StartThreadOptions::new((*turn.config).clone()))
+        .await
+        .unwrap();
+    set_agent_control(&mut session, manager.agent_control());
+    session.thread_id = root.thread_id;
+    let child_path = AgentPath::try_from("/root/worker").unwrap();
+    let control = session
+        .services
+        .local_agent_runtime
+        .control(session.session_id());
+    let child = control
+        .spawn_agent_with_metadata(
+            (*turn.config).clone(),
+            Vec::new(),
+            SessionSource::SubAgent(SubAgentSource::ThreadSpawn {
+                parent_thread_id: root.thread_id,
+                depth: 1,
+                agent_path: Some(child_path.clone()),
+                agent_nickname: None,
+                agent_role: None,
+            }),
+            crate::agent::types::SpawnAgentOptions::default(),
+        )
+        .await
+        .unwrap();
+    let child_id = child.thread_id;
+    let command = crate::native_admission_tests::logging_hook(&directory, "deny");
+    crate::native_admission_tests::install(&session, &directory, Some(&command));
+    let session = Arc::new(session);
+    let turn = Arc::new(turn);
+    for target in [
+        "worker".to_string(),
+        "/root/worker".to_string(),
+        child_id.to_string(),
+    ] {
+        for tool in ["send_message", "followup_task", "interrupt_agent"] {
+            let arguments = if tool == "interrupt_agent" {
+                json!({"target": target})
+            } else {
+                json!({"target": target, "message": "must not arrive"})
+            };
+            let call = invocation(
+                Arc::clone(&session),
+                Arc::clone(&turn),
+                tool,
+                function_payload(arguments),
+            );
+            let result = match tool {
+                "send_message" => SendMessageHandlerV2.handle(call).await,
+                "followup_task" => FollowupTaskHandlerV2.handle(call).await,
+                _ => InterruptAgentHandler.handle(call).await,
+            };
+            assert!(result.is_err(), "{tool} should have been denied");
+            assert!(
+                session
+                    .services
+                    .agent_control
+                    .take_mailbox(child_id)
+                    .is_empty()
+            );
+        }
+    }
+    for (tool, args) in [
+        (
+            "send_input",
+            json!({"target": child_id, "message": "must not arrive", "interrupt": true}),
+        ),
+        ("resume_agent", json!({"id": child_id})),
+        ("close_agent", json!({"target": child_id})),
+    ] {
+        let call = invocation(
+            Arc::clone(&session),
+            Arc::clone(&turn),
+            tool,
+            function_payload(args),
+        );
+        let result = match tool {
+            "send_input" => SendInputHandler.handle(call).await,
+            "resume_agent" => ResumeAgentHandler.handle(call).await,
+            _ => CloseAgentHandler.handle(call).await,
+        };
+        assert!(result.is_err(), "{tool} should have been denied");
+    }
+    let observed = crate::native_admission_tests::calls(&directory);
+    assert_eq!(observed.len(), 12);
+    for call in observed {
+        assert_eq!(
+            call["native_dispatch"]["operation"]["thread_id"],
+            child_id.to_string()
+        );
+        assert_eq!(
+            call["native_dispatch"]["operation"]["agent_path"],
+            child_path.as_str()
+        );
+    }
+    assert!(manager.get_thread(child_id).await.is_ok());
+    manager
+        .shutdown_all_threads_bounded(Duration::from_secs(5))
+        .await;
+}
+
 fn parse_agent_id(id: &str) -> ThreadId {
     ThreadId::from_string(id).expect("agent id should be valid")
 }

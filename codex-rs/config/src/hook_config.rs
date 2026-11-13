@@ -24,6 +24,17 @@ pub struct HooksToml {
     pub events: HookEventsToml,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub state: BTreeMap<String, HookStateToml>,
+    /// Tool matchers requiring explicit admission from synchronous PreToolUse hooks.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub required_admission: Vec<RequiredHookAdmission>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RequiredHookAdmission {
+    pub matcher: String,
+    /// Stable handler key returned by hooks/list.
+    pub hook: String,
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

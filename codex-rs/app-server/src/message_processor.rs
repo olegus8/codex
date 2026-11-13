@@ -1612,6 +1612,9 @@ impl MessageProcessor {
             ClientRequest::HooksList { params, .. } => {
                 self.catalog_processor.hooks_list(params).await
             }
+            ClientRequest::NativeToolAdmission { params, .. } => {
+                self.thread_processor.native_tool_admission(params).await
+            }
             ClientRequest::MarketplaceAdd { params, .. } => {
                 self.marketplace_processor.marketplace_add(params).await
             }

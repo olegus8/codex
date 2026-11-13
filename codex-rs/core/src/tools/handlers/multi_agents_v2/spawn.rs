@@ -102,6 +102,7 @@ async fn handle_spawn_agent(
     ),
     FunctionCallError,
 > {
+    let native_call = invocation.clone();
     let ToolInvocation {
         session,
         step_context,
@@ -122,6 +123,7 @@ async fn handle_spawn_agent(
         .filter(|role| !role.is_empty());
 
     let spawned = crate::thread_spawn::spawn(
+        &native_call,
         &session,
         &step_context,
         &call_id,

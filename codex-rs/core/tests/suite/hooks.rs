@@ -4333,6 +4333,96 @@ try {{
     Ok(())
 }
 
+#[tokio::test]
+async fn required_native_admission_denies_actual_code_mode_child_dispatch() -> Result<()> {
+    let server = start_mock_server().await;
+    let responses = mount_sse_sequence(&server, vec![
+        sse(vec![
+            ev_response_created("native-spawn"),
+            ev_custom_tool_call("outer-native-call", "exec", r#"
+try {
+  await tools.collaboration__spawn_agent({task_name: "worker", message: "must not start", fork_turns: "none"});
+  text("unexpected success");
+} catch (error) { text(String(error)); }
+"#),
+            ev_completed("native-spawn"),
+        ]),
+        sse(vec![ev_response_created("native-finished"), ev_assistant_message("native-answer", "denied"), ev_completed("native-finished")]),
+    ]).await;
+    let mut builder = test_codex()
+        .with_model("gpt-5.6-sol")
+        .with_model_info_override("gpt-5.6-sol", |model| {
+            model.tool_mode = Some(codex_protocol::openai_models::ToolMode::CodeMode);
+            model.use_responses_lite = true;
+        })
+        .with_pre_build_hook(|home| {
+            write_pre_tool_use_hook(
+                home,
+                Some("^NativeDispatch$"),
+                "json_deny",
+                "native fixture denied",
+            )
+            .unwrap();
+        })
+        .with_config(|config| {
+            for feature in [
+                Feature::Collab,
+                Feature::MultiAgentV2,
+                Feature::CodeMode,
+                Feature::CodeModeHostGrpc,
+            ] {
+                config.features.enable(feature).unwrap();
+            }
+            config.multi_agent_v2.non_code_mode_only = false;
+            trust_discovered_hooks(config);
+            let mut user = config
+                .config_layer_stack
+                .get_active_user_layer()
+                .unwrap()
+                .config
+                .clone();
+            let requirements = toml::Value::try_from(vec![codex_config::RequiredHookAdmission {
+                matcher: "NativeDispatch".into(),
+                hook: format!(
+                    "{}:pre_tool_use:0:0",
+                    config.codex_home.join("hooks.json").display()
+                ),
+            }])
+            .unwrap();
+            user["hooks"]
+                .as_table_mut()
+                .unwrap()
+                .insert("required_admission".into(), requirements);
+            config.config_layer_stack = config
+                .config_layer_stack
+                .with_user_config(&config.codex_home.join("config.toml"), user)
+                .unwrap();
+        });
+    let test = builder.build_with_auto_env(&server).await?;
+    let mut created = test.thread_manager.subscribe_thread_created();
+    test.submit_turn("try the fixture task").await?;
+    assert!(created.try_recv().is_err(), "denial must create no child");
+    let requests = responses.requests();
+    assert_eq!(requests.len(), 2);
+    let output = code_mode_custom_tool_output_text(
+        &requests[1].custom_tool_call_output("outer-native-call"),
+    );
+    assert!(output.contains("native fixture denied"), "{output}");
+    let calls = read_pre_tool_use_hook_inputs(test.codex_home_path())?;
+    assert_eq!(calls.len(), 1);
+    assert_eq!(
+        calls[0]["session_id"],
+        test.session_configured.thread_id.to_string()
+    );
+    assert_eq!(calls[0]["native_dispatch"]["source"]["kind"], "code_mode");
+    assert_eq!(
+        calls[0]["native_dispatch"]["operation"]["agent_path"],
+        "/root/worker"
+    );
+    assert_ne!(calls[0]["tool_use_id"], "outer-native-call");
+    Ok(())
+}
+
 async fn assert_post_tool_use_blocks_code_mode_tool_result(
     hook_mode: &'static str,
     reason: &'static str,

@@ -202,8 +202,32 @@ pub(crate) async fn run_pre_tool_use_hooks(
     tool_cwd: Option<codex_utils_path_uri::PathUri>,
     target_environments: &[&str],
 ) -> PreToolUseHookResult {
+    run_pre_tool_use_hooks_with_native(
+        sess,
+        step_context,
+        tool_use_id,
+        tool_name,
+        tool_input,
+        tool_cwd,
+        target_environments,
+        None,
+    )
+    .await
+}
+
+pub(crate) async fn run_pre_tool_use_hooks_with_native(
+    sess: &Arc<Session>,
+    step_context: &StepContext,
+    tool_use_id: String,
+    tool_name: &HookToolName,
+    tool_input: &Value,
+    tool_cwd: Option<codex_utils_path_uri::PathUri>,
+    target_environments: &[&str],
+    native_dispatch: Option<Value>,
+) -> PreToolUseHookResult {
     let turn_context = &step_context.turn;
     let request = PreToolUseRequest {
+        native_dispatch,
         session_id: sess.session_id().into(),
         turn_id: turn_context.sub_id.clone(),
         subagent: thread_spawn_subagent_hook_context(sess, turn_context),
@@ -240,11 +264,7 @@ pub(crate) async fn run_pre_tool_use_hooks(
         return PreToolUseHookResult::Continue { updated_input };
     }
 
-    let Some(reason) = block_reason else {
-        return PreToolUseHookResult::Continue {
-            updated_input: None,
-        };
-    };
+    let reason = block_reason.unwrap_or_else(|| "admission refused".to_string());
 
     if (tool_name.name() == "Bash" || tool_name.name() == "apply_patch")
         && let Some(command) = tool_input.get("command").and_then(Value::as_str)

@@ -72,6 +72,13 @@ pub struct Hooks {
 }
 
 impl Hooks {
+    pub fn requires_admission(&self, tool_name: &str) -> bool {
+        self.engine
+            .required_admission
+            .iter()
+            .any(|(matcher, _)| matcher.matches(Some(tool_name)))
+    }
+
     /// Bind this session's hook runtime and output files to its thread, rejecting unloadable
     /// required managed hooks.
     pub fn new(
@@ -120,6 +127,9 @@ impl Hooks {
         hooks.engine.command_runtime.environment_executor = Some(executor);
         if !discovered.handlers.is_empty() {
             Arc::make_mut(&mut hooks.engine.handlers).extend(discovered.handlers);
+        }
+        if !discovered.hook_entries.is_empty() {
+            Arc::make_mut(&mut hooks.engine.hook_entries).extend(discovered.hook_entries);
         }
         if !discovered.warnings.is_empty() {
             let mut warnings = hooks.engine.warnings.to_vec();

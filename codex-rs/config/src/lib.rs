@@ -175,6 +175,7 @@ pub use hook_config::HooksFile;
 pub use hook_config::HooksToml;
 pub use hook_config::ManagedHooksRequirementsToml;
 pub use hook_config::MatcherGroup;
+pub use hook_config::RequiredHookAdmission;
 pub use host_name::host_name;
 pub use host_name::os_host_name;
 pub use in_app_browser_requirements::InAppBrowserRequirementsToml;

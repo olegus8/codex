@@ -41,6 +41,164 @@ async fn test_session_and_turn() -> (Arc<Session>, Arc<TurnContext>) {
     (Arc::new(session), Arc::new(turn))
 }
 
+#[tokio::test]
+async fn native_admission_controls_terminal_bytes_and_preserves_empty_polling() -> anyhow::Result<()>
+{
+    let directory = tempfile::tempdir()?;
+    let (session, turn) = test_session_and_turn().await;
+    let command = crate::native_admission_tests::logging_hook(&directory, "deny");
+    crate::native_admission_tests::install(&session, &directory, Some(&command));
+    let effect = directory.path().join("terminal-effect");
+    let opened = exec_command(
+        &session,
+        &turn,
+        &format!(
+            "IFS= read -r line; printf '%s' \"$line\" > '{}'",
+            effect.display()
+        ),
+        250,
+        None,
+    )
+    .await?;
+    let process_id = opened.process_id.expect("live terminal");
+    let denied = write_stdin(&session, &turn, process_id, "denied\n", 250).await;
+    assert!(matches!(denied, Err(UnifiedExecError::StdinApproval(_))));
+    assert!(!effect.exists());
+    let observed = crate::native_admission_tests::calls(&directory);
+    assert_eq!(observed.len(), 1);
+    assert_eq!(
+        observed[0]["native_dispatch"]["operation"]["input"],
+        "denied\n"
+    );
+    let instance = observed[0]["native_dispatch"]["operation"]["instance_id"].clone();
+    write_stdin(&session, &turn, process_id, "", 250).await?;
+    assert_eq!(crate::native_admission_tests::calls(&directory).len(), 1);
+    std::fs::write(directory.path().join("decision"), "allow")?;
+    write_stdin(&session, &turn, process_id, "allowed\n", 1000).await?;
+    assert_eq!(std::fs::read_to_string(effect)?, "allowed");
+    let observed = crate::native_admission_tests::calls(&directory);
+    assert_eq!(observed.len(), 2);
+    assert_eq!(
+        observed[1]["native_dispatch"]["operation"]["instance_id"],
+        instance
+    );
+    assert_eq!(
+        observed[1]["native_dispatch"]["operation"]["input"],
+        "allowed\n"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn native_admission_missing_handler_has_zero_terminal_effects() -> anyhow::Result<()> {
+    let directory = tempfile::tempdir()?;
+    let (session, turn) = test_session_and_turn().await;
+    crate::native_admission_tests::install(&session, &directory, None);
+    let effect = directory.path().join("terminal-effect");
+    let opened = exec_command(
+        &session,
+        &turn,
+        &format!(
+            "IFS= read -r line; printf '%s' \"$line\" > '{}'",
+            effect.display()
+        ),
+        250,
+        None,
+    )
+    .await?;
+    let process_id = opened.process_id.expect("live terminal");
+    assert!(
+        write_stdin(&session, &turn, process_id, "denied\n", 250)
+            .await
+            .is_err()
+    );
+    assert!(!effect.exists());
+    session
+        .services
+        .unified_exec_manager
+        .terminate_all_processes()
+        .await;
+    Ok(())
+}
+
+#[tokio::test]
+async fn native_admission_revalidates_terminal_replacement_after_hook() -> anyhow::Result<()> {
+    let directory = tempfile::tempdir()?;
+    let (session, turn) = test_session_and_turn().await;
+    let command = crate::native_admission_tests::logging_hook(&directory, "wait");
+    crate::native_admission_tests::install(&session, &directory, Some(&command));
+    let first_effect = directory.path().join("first-effect");
+    let second_effect = directory.path().join("second-effect");
+    let opened = exec_command(
+        &session,
+        &turn,
+        &format!(
+            "IFS= read -r line; printf '%s' \"$line\" > '{}'",
+            first_effect.display()
+        ),
+        250,
+        None,
+    )
+    .await?;
+    let first_id = opened.process_id.unwrap();
+    let second = exec_command(
+        &session,
+        &turn,
+        &format!(
+            "IFS= read -r line; printf '%s' \"$line\" > '{}'",
+            second_effect.display()
+        ),
+        250,
+        None,
+    )
+    .await?;
+    let second_id = second.process_id.unwrap();
+    let writer_session = Arc::clone(&session);
+    let writer_turn = Arc::clone(&turn);
+    let writer = tokio::spawn(async move {
+        write_stdin(
+            &writer_session,
+            &writer_turn,
+            first_id,
+            "must not arrive\n",
+            250,
+        )
+        .await
+    });
+    core_test_support::fs_wait::wait_for_path_exists(
+        directory.path().join("ready"),
+        Duration::from_secs(5),
+    )
+    .await?;
+    let old = {
+        let mut store = session
+            .services
+            .unified_exec_manager
+            .process_store
+            .lock()
+            .await;
+        let old = store.processes.remove(&first_id).unwrap();
+        let mut replacement = store.processes.remove(&second_id).unwrap();
+        replacement.process_id = first_id;
+        store.processes.insert(first_id, replacement);
+        old
+    };
+    std::fs::write(directory.path().join("continue"), "continue")?;
+    assert!(matches!(
+        writer.await?,
+        Err(UnifiedExecError::UnknownProcessId { .. })
+    ));
+    assert!(!first_effect.exists());
+    assert!(!second_effect.exists());
+    old.process.terminate();
+    session
+        .services
+        .unified_exec_manager
+        .terminate_all_processes()
+        .await;
+    Ok(())
+}
+
 async fn exec_command(
     session: &Arc<Session>,
     turn: &Arc<TurnContext>,

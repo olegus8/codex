@@ -10,6 +10,9 @@ mod apps;
 mod client;
 mod client_common;
 mod model_request;
+mod native_admission;
+#[cfg(all(test, unix))]
+mod native_admission_tests;
 mod realtime_context;
 mod realtime_conversation;
 mod realtime_history;

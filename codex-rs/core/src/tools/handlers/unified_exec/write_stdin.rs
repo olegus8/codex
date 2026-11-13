@@ -138,11 +138,19 @@ impl CoreToolRuntime for WriteStdinHandler {
         matches!(payload, ToolPayload::Function { .. })
     }
 
-    fn pre_tool_use_payload(&self, _invocation: &ToolInvocation) -> Option<PreToolUsePayload> {
-        // `write_stdin` is transport for an existing exec session. Empty writes
-        // are background polls, and non-empty writes continue a command that
-        // already ran PreToolUse as Bash, so do not emit a second pre hook here.
-        None
+    fn pre_tool_use_payload(&self, invocation: &ToolInvocation) -> Option<PreToolUsePayload> {
+        let args = WriteStdinArgs::parse(&invocation.payload).ok()?;
+        if args.chars.is_empty() {
+            return None;
+        }
+        Some(PreToolUsePayload {
+            tool_name: crate::tools::hook_names::HookToolName::new("write_stdin"),
+            tool_input: serde_json::from_str(match &invocation.payload {
+                ToolPayload::Function { arguments } => arguments,
+                _ => return None,
+            })
+            .ok()?,
+        })
     }
 
     fn post_tool_use_payload(

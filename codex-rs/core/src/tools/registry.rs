@@ -1051,6 +1051,11 @@ async fn handle_any_tool(
     invocation: ToolInvocation,
     call_state: Option<&ToolCallState>,
 ) -> Result<AnyToolResult, FunctionCallError> {
+    let _native_call = if crate::native_admission::NativeToolCall::supports(&invocation) {
+        Some(crate::native_admission::NativeToolCall::register(&invocation)?)
+    } else {
+        None
+    };
     let call_id = invocation.call_id.clone();
     let payload = invocation.payload.clone();
     let output = tool.handle(invocation.clone()).await?;

@@ -37,6 +37,7 @@ impl Handler {
         &self,
         invocation: ToolInvocation,
     ) -> Result<Box<dyn crate::tools::context::ToolOutput>, FunctionCallError> {
+        let native_call = invocation.clone();
         let ToolInvocation {
             session,
             turn,
@@ -54,6 +55,13 @@ impl Handler {
             .local_agent_runtime
             .control(session.session_id());
         let receiver_agent = local_agent_control.get_agent_metadata(receiver_thread_id);
+        crate::native_admission::admit_agent(
+            &native_call,
+            "send_input",
+            &args.target,
+            receiver_thread_id,
+        )
+        .await?;
         let residency_pin = if receiver_agent.is_some() {
             let resume_config = build_agent_resume_config(turn.as_ref())
                 .map_err(FunctionCallError::RespondToModel)?;

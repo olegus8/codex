@@ -1,0 +1,67 @@
+NATIVE ADMISSION
+
+Use hooks.required_admission records to bind a tool matcher to a handler's
+stable hooks/list key. A covered invocation requires that exact trusted,
+enabled, synchronous handler to return a valid PreToolUse allow decision.
+Missing handlers, asynchronous handlers, launch errors, timeouts, malformed
+output and missing decisions refuse the invocation. Uncovered tools retain
+optional-hook behavior.
+
+Match NativeDispatch for admission at terminal and task effects. Read
+native_dispatch separately from tool_input. Its thread_id, turn_id and
+call_id identify the native origin; tool_name identifies the original tool.
+The tool object preserves its native namespace and name.
+Code-mode origins also carry the cell and nested runtime call identities.
+Do not use argument or environment identities to select the caller.
+
+For terminal writes, inspect operation.session_id, instance_id,
+original_call_id, environment_id and input. Input is the exact UTF-8 text
+about to be written. Empty polls do not request admission. The native
+registry revalidates the process instance after hooks before writing.
+
+For collaboration, inspect the resolved thread_id and agent_path. For a
+spawn, inspect its parent, effective cwd and model; V2 also supplies the
+canonical child path. A follow-up covers
+restoring the recipient and starting or steering its turn. Legacy send_input
+covers its requested interrupt and delivery. Inspect the original arguments
+for those options. Task references are resolved again after admission.
+
+TUI create, send and fork resolve their source or recipient through thread
+reads, then request item/tool/admission in the originating live invocation.
+The server checks the native tool and argument-selected target. The TUI
+checks the resolved identity and cwd again before its effect. Shared MCP
+transports retain the originating call metadata; task mutations reject
+missing call or turn identities. No child inherits a parent's live admission.
+
+Return permissionDecision allow without updatedInput for NativeDispatch.
+Resolved operations cannot be rewritten. Deny with the existing PreToolUse
+deny decision or exit code 2. Keep consumer authorization in the handler.
+These hooks do not contain arbitrary administrator programs.
+
+ISOLATED FIXTURES
+
+Use the checkout's Rust toolchain and development test profile. Normalize
+workspace versions in the lockfile before --locked tests when testing a
+versioned checkout. Retain the original lockfile.
+
+Run these targets with no account credentials or live terminal panes:
+
+  cargo test --locked -p codex-hooks --lib
+  cargo test --locked -p codex-core --lib native_admission
+  cargo test --locked -p codex-core --lib write_stdin_pre_tool_use
+  cargo test --locked -p codex-core --test suite \
+    required_native_admission_denies_actual_code_mode_child_dispatch
+  cargo test --locked -p codex-tui --lib dynamic_tools
+
+The fixtures launch private hook processes and terminals. Check that denied
+input creates no terminal marker, empty polls invoke no admission handler,
+allowed input arrives exactly, and a terminal replaced while its hook waits
+receives nothing. Check canonical recipient IDs for relative names, absolute
+names and UUIDs. Check that denied collaboration dispatch creates no mail or
+child and leaves its recipient available.
+
+Check concurrent origins with identical call IDs, nested code-mode identity,
+forged argument metadata, cancellation, and expired invocation ownership.
+The code-mode fixture must execute the native dispatch entry point and catch
+its denial without creating a child. Preserve the optional read-only TUI
+fixtures when integrating an external adapter.

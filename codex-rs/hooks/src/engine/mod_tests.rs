@@ -60,6 +60,154 @@ fn cwd() -> AbsolutePathBuf {
     AbsolutePathBuf::current_dir().expect("current dir")
 }
 
+#[cfg(unix)]
+#[tokio::test]
+async fn required_admission_runs_real_hooks_and_refuses_missing_decisions() {
+    let temp = tempdir().unwrap();
+    let config_path = AbsolutePathBuf::try_from(temp.path().join("config.toml")).unwrap();
+    let mut config = config_toml_with_pre_tool_use("printf ignored");
+    config["hooks"].as_table_mut().unwrap().insert(
+        "required_admission".into(),
+        TomlValue::Array(vec![TomlValue::Table(
+            [
+                ("matcher".into(), TomlValue::String("Bash".into())),
+                (
+                    "hook".into(),
+                    TomlValue::String(format!("{}:pre_tool_use:0:0", config_path.display())),
+                ),
+            ]
+            .into_iter()
+            .collect(),
+        )]),
+    );
+    let stack = ConfigLayerStack::new(
+        vec![ConfigLayerEntry::new(
+            ConfigLayerSource::User {
+                file: config_path,
+                profile: None,
+            },
+            config,
+        )],
+        Default::default(),
+        Default::default(),
+    )
+    .unwrap();
+    let mut engine = ClaudeHooksEngine::new(
+        true,
+        true,
+        Some(&stack),
+        Vec::new(),
+        Vec::new(),
+        command_runtime(CommandShell {
+            program: String::new(),
+            args: Vec::new(),
+        }),
+        mcp_executor(),
+    );
+    let request = PreToolUseRequest {
+        session_id: ThreadId::new(),
+        turn_id: "admission-turn".into(),
+        subagent: None,
+        cwd: AbsolutePathBuf::try_from(temp.path().to_path_buf()).unwrap(),
+        tool_cwd: None,
+        transcript_path: None,
+        model: "test-model".into(),
+        permission_mode: "default".into(),
+        tool_name: "Bash".into(),
+        matcher_aliases: Vec::new(),
+        tool_use_id: "admission-call".into(),
+        tool_input: serde_json::json!({"command": "printf effect"}),
+        native_dispatch: None,
+    };
+    assert_eq!(engine.handlers.len(), 1);
+    let original = engine.handlers[0].clone();
+    for (command, blocked) in [
+        (
+            r#"printf '%s' '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow"}}'"#,
+            false,
+        ),
+        (
+            r#"printf '%s' '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"denied"}}'"#,
+            true,
+        ),
+        ("printf ignored", true),
+        ("printf '{broken'", true),
+        ("printf '{}'", true),
+        ("exit 1", true),
+        ("exit 2", true),
+        ("sleep 2", true),
+    ] {
+        let mut handler = original.clone();
+        handler.timeout_sec = 1;
+        handler.kind = ConfiguredHandlerKind::Command {
+            command: command.into(),
+            r#async: false,
+            env: HashMap::new(),
+        };
+        engine.handlers = Arc::new(vec![handler]);
+        let outcome = engine.run_pre_tool_use(request.clone()).await;
+        assert_eq!(
+            outcome.should_block, blocked,
+            "{command}: {:?}",
+            outcome.hook_events
+        );
+        assert_eq!(outcome.hook_events.len(), 1);
+    }
+    engine.handlers = Arc::default();
+    assert!(engine.run_pre_tool_use(request.clone()).await.should_block);
+    let mut substitute = original.clone();
+    substitute.display_order += 1;
+    substitute.kind = ConfiguredHandlerKind::Command {
+        command: r#"printf '%s' '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow"}}'"#.into(),
+        r#async: false,
+        env: HashMap::new(),
+    };
+    engine.handlers = Arc::new(vec![substitute]);
+    assert!(engine.run_pre_tool_use(request.clone()).await.should_block);
+    let mut asynchronous = original.clone();
+    asynchronous.kind = ConfiguredHandlerKind::Command {
+        command: "printf ignored".into(),
+        r#async: true,
+        env: HashMap::new(),
+    };
+    engine.handlers = Arc::new(vec![asynchronous]);
+    assert!(engine.run_pre_tool_use(request.clone()).await.should_block);
+    engine.handlers = Arc::new(vec![original.clone()]);
+    engine.command_runtime = command_runtime(CommandShell {
+        program: "/missing-native-admission-shell".into(),
+        args: Vec::new(),
+    });
+    assert!(engine.run_pre_tool_use(request.clone()).await.should_block);
+    engine.command_runtime = command_runtime(CommandShell {
+        program: String::new(),
+        args: Vec::new(),
+    });
+    let mut unrelated = request.clone();
+    unrelated.tool_name = "read_file".into();
+    assert!(!engine.run_pre_tool_use(unrelated).await.should_block);
+    let untrusted = ClaudeHooksEngine::new(
+        true,
+        false,
+        Some(&stack),
+        Vec::new(),
+        Vec::new(),
+        command_runtime(CommandShell {
+            program: String::new(),
+            args: Vec::new(),
+        }),
+        mcp_executor(),
+    );
+    assert!(
+        untrusted
+            .run_pre_tool_use(request.clone())
+            .await
+            .should_block
+    );
+    engine.handlers = Arc::new(vec![original]);
+    engine.required_admission = Arc::default();
+    assert!(!engine.run_pre_tool_use(request).await.should_block);
+}
+
 fn command_runtime(shell: CommandShell) -> CommandHookRuntime {
     let (result_sender, _result_receiver) = async_channel::unbounded();
     CommandHookRuntime::new(
@@ -642,6 +790,7 @@ with Path(r"{log_path}").open("a", encoding="utf-8") as handle:
     assert!(listed.hooks[0].is_managed);
     let cwd = cwd();
     let preview = engine.preview_pre_tool_use(&PreToolUseRequest {
+        native_dispatch: None,
         session_id: ThreadId::new(),
         turn_id: "turn-1".to_string(),
         subagent: None,
@@ -663,6 +812,7 @@ with Path(r"{log_path}").open("a", encoding="utf-8") as handle:
 
     let outcome = engine
         .run_pre_tool_use(PreToolUseRequest {
+            native_dispatch: None,
             session_id: ThreadId::new(),
             turn_id: "turn-1".to_string(),
             subagent: None,
@@ -738,6 +888,7 @@ async fn requirements_managed_hooks_execute_windows_command_override() {
 
     let outcome = engine
         .run_pre_tool_use(PreToolUseRequest {
+            native_dispatch: None,
             session_id: ThreadId::new(),
             turn_id: "turn-1".to_string(),
             subagent: None,
@@ -1141,6 +1292,7 @@ fn requirements_managed_hooks_load_when_managed_dir_is_missing() {
     assert!(engine.warnings().is_empty());
     let cwd = cwd();
     let preview = engine.preview_pre_tool_use(&PreToolUseRequest {
+        native_dispatch: None,
         session_id: ThreadId::new(),
         turn_id: "turn-1".to_string(),
         subagent: None,
@@ -1575,6 +1727,7 @@ fn discovers_hooks_from_json_and_toml_in_the_same_layer() {
 
     let cwd = cwd();
     let preview = engine.preview_pre_tool_use(&PreToolUseRequest {
+        native_dispatch: None,
         session_id: ThreadId::new(),
         turn_id: "turn-1".to_string(),
         subagent: None,
@@ -1673,6 +1826,7 @@ fn profile_user_layers_load_shared_hooks_json_once() {
     assert!(engine.warnings().is_empty());
     assert_eq!(engine.handlers.len(), 1);
     let preview = engine.preview_pre_tool_use(&PreToolUseRequest {
+        native_dispatch: None,
         session_id: ThreadId::new(),
         turn_id: "turn-1".to_string(),
         subagent: None,
@@ -2114,6 +2268,7 @@ print(json.dumps({
     );
 
     let preview = engine.preview_pre_tool_use(&PreToolUseRequest {
+        native_dispatch: None,
         session_id: ThreadId::new(),
         turn_id: "turn-1".to_string(),
         subagent: None,
@@ -2150,6 +2305,7 @@ print(json.dumps({
 
     let outcome = engine
         .run_pre_tool_use(PreToolUseRequest {
+            native_dispatch: None,
             session_id: ThreadId::new(),
             turn_id: "turn-1".to_string(),
             subagent: None,
@@ -2857,6 +3013,7 @@ async fn mcp_tool_hooks_expand_event_input_and_apply_pre_tool_decisions() {
     .expect("config layer stack");
 
     let request = PreToolUseRequest {
+        native_dispatch: None,
         session_id: ThreadId::new(),
         turn_id: "turn-1".to_string(),
         subagent: None,

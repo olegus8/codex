@@ -31,6 +31,7 @@ impl ToolExecutor<ToolInvocation> for Handler {
 async fn handle_close_agent(
     invocation: ToolInvocation,
 ) -> Result<CloseAgentResult, FunctionCallError> {
+    let native_call = invocation.clone();
     let ToolInvocation {
         session,
         turn,
@@ -66,6 +67,7 @@ async fn handle_close_agent(
         .await;
     // Shutdown may remove the target before a descendant fails to close.
     let previous_status = local_agent_control.get_status(agent_id).await;
+    crate::native_admission::admit_agent(&native_call, "close", &args.target, agent_id).await?;
     let result = local_agent_control.close_agent(agent_id).await;
     let (status, receiver_agent) = match &result {
         Ok(snapshot) => (

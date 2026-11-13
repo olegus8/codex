@@ -935,6 +935,11 @@ client_request_definitions! {
         serialization: global_shared_read("config"),
         response: v2::HooksListResponse,
     },
+    NativeToolAdmission => "item/tool/admission" {
+        params: v2::NativeToolAdmissionParams,
+        serialization: None,
+        response: v2::NativeToolAdmissionResponse,
+    },
     MarketplaceAdd => "marketplace/add" {
         params: v2::MarketplaceAddParams,
         serialization: global("config"),

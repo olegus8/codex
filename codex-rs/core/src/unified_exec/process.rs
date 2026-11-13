@@ -98,6 +98,7 @@ enum ProcessHandle {
 /// Unified wrapper over directly spawned PTY sessions and exec-server-backed
 /// processes.
 pub(crate) struct UnifiedExecProcess {
+    pub(super) instance_id: uuid::Uuid,
     process_handle: ProcessHandle,
     output_tx: broadcast::Sender<Vec<u8>>,
     output: OutputHandles,
@@ -145,6 +146,7 @@ impl UnifiedExecProcess {
 
         Self {
             process_handle,
+            instance_id: uuid::Uuid::new_v4(),
             output_tx,
             output,
             output_drained,

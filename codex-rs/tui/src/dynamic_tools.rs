@@ -330,6 +330,7 @@ async fn execute_inner(
     mut status_updates: broadcast::Receiver<ThreadStatusChangedNotification>,
     app_event_tx: Option<&AppEventSender>,
 ) -> Result<Value, String> {
+    let native_call = params.clone();
     let mcp_config = thread_start_params.config.as_ref().and_then(|overrides| {
         let key = format!("mcp_servers.{NAMESPACE}");
         overrides
@@ -485,6 +486,7 @@ async fn execute_inner(
                 return Err("title must not be empty".to_string());
             }
             let source_thread = read_thread(&handle, &params.thread_id).await?;
+            admit_task_dispatch(&handle, &native_call, &source_thread).await?;
             if source_thread.ephemeral {
                 return Err(
                     "ephemeral tasks cannot create inspectable background tasks".to_string()
@@ -607,6 +609,7 @@ async fn execute_inner(
                 .thread_id
                 .unwrap_or_else(|| params.thread_id.clone());
             let thread = read_thread(&handle, &thread_id).await?;
+            admit_task_dispatch(&handle, &native_call, &thread).await?;
             // Keep source requests routable while the fork is being created.
             register_background_thread(
                 app_event_tx,
@@ -696,6 +699,7 @@ async fn execute_inner(
             let prompt = delegated_prompt(&params.thread_id, &arguments.prompt);
             validate_prompt(&prompt, MAX_DELEGATED_INPUT_BYTES)?;
             let thread = read_thread(&handle, &arguments.thread_id).await?;
+            admit_task_dispatch(&handle, &native_call, &thread).await?;
             let exclude_turns = thread.history_mode == ThreadHistoryMode::Paginated;
             let resumed: ThreadResumeResponse = request_with_history_fallback(
                 &handle,
@@ -1231,6 +1235,32 @@ async fn read_thread(handle: &AppServerRequestHandle, thread_id: &str) -> Result
     })
     .await?;
     Ok(response.thread)
+}
+
+async fn admit_task_dispatch(
+    handle: &AppServerRequestHandle,
+    call: &DynamicToolCallParams,
+    target: &Thread,
+) -> Result<(), String> {
+    let _: codex_app_server_protocol::NativeToolAdmissionResponse =
+        request(handle, |request_id| ClientRequest::NativeToolAdmission {
+            request_id,
+            params: codex_app_server_protocol::NativeToolAdmissionParams {
+                thread_id: call.thread_id.clone(),
+                call_id: call.call_id.clone(),
+                operation: json!({
+                    "kind": "thread", "action": call.tool,
+                    "thread_id": target.id, "cwd": target.cwd,
+                    "source": target.source,
+                }),
+            },
+        })
+        .await?;
+    let current = read_thread(handle, &target.id).await?;
+    if current.id != target.id || current.cwd != target.cwd {
+        return Err("native task target changed during admission".into());
+    }
+    Ok(())
 }
 
 async fn start_turn(
