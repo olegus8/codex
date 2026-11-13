@@ -11,7 +11,7 @@ Match NativeDispatch for admission at terminal and task effects. Read
 native_dispatch separately from tool_input. Its thread_id, turn_id and
 call_id identify the native origin; tool_name identifies the original tool.
 The tool object preserves its native namespace and name.
-Code-mode origins also carry the cell and nested runtime call identities.
+Task dispatches from code mode also carry cell and nested call identities.
 Do not use argument or environment identities to select the caller.
 
 For terminal writes, inspect operation.session_id, instance_id,
@@ -43,13 +43,15 @@ ISOLATED FIXTURES
 Use the checkout's Rust toolchain and development test profile. Normalize
 workspace versions in the lockfile before --locked tests when testing a
 versioned checkout. Retain the original lockfile.
+Set RUST_MIN_STACK=8388608 for the test targets below.
 
 Run these targets with no account credentials or live terminal panes:
 
+  cargo build --locked -p codex-code-mode-host --bin codex-code-mode-host
   cargo test --locked -p codex-hooks --lib
   cargo test --locked -p codex-core --lib native_admission
   cargo test --locked -p codex-core --lib write_stdin_pre_tool_use
-  cargo test --locked -p codex-core --test suite \
+  cargo test --locked -p codex-core --test all \
     required_native_admission_denies_actual_code_mode_child_dispatch
   cargo test --locked -p codex-tui --lib dynamic_tools
 

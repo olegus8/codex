@@ -544,6 +544,7 @@ mod tests {
 
     fn handler_for(event_name: HookEventName) -> ConfiguredHandler {
         ConfiguredHandler {
+            admission_required: false,
             builtin: false,
             plugin_trust: None,
             event_name,

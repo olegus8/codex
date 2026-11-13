@@ -120,6 +120,7 @@ async fn required_admission_runs_real_hooks_and_refuses_missing_decisions() {
         native_dispatch: None,
     };
     assert_eq!(engine.handlers.len(), 1);
+    Arc::make_mut(&mut engine.hook_entries)[0].trust_status = HookTrustStatus::Trusted;
     let original = engine.handlers[0].clone();
     for (command, blocked) in [
         (
@@ -163,6 +164,7 @@ async fn required_admission_runs_real_hooks_and_refuses_missing_decisions() {
         env: HashMap::new(),
     };
     engine.handlers = Arc::new(vec![substitute]);
+    assert!(engine.preview_pre_tool_use(&request).is_empty());
     assert!(engine.run_pre_tool_use(request.clone()).await.should_block);
     let mut asynchronous = original.clone();
     asynchronous.kind = ConfiguredHandlerKind::Command {
@@ -182,12 +184,25 @@ async fn required_admission_runs_real_hooks_and_refuses_missing_decisions() {
         program: String::new(),
         args: Vec::new(),
     });
+    let mut mandatory = original.clone();
+    mandatory.kind = ConfiguredHandlerKind::Command {
+        command: r#"printf '%s' '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow"}}'"#.into(),
+        r#async: false,
+        env: HashMap::new(),
+    };
+    let mut optional = mandatory.clone();
+    optional.display_order += 1;
+    engine.handlers = Arc::new(vec![mandatory, optional]);
+    let mixed = engine.run_pre_tool_use(request.clone()).await;
+    assert!(!mixed.should_block);
+    assert_eq!(mixed.hook_events[0].run.status, HookRunStatus::Completed);
+    assert_eq!(mixed.hook_events[1].run.status, HookRunStatus::Failed);
     let mut unrelated = request.clone();
     unrelated.tool_name = "read_file".into();
     assert!(!engine.run_pre_tool_use(unrelated).await.should_block);
     let untrusted = ClaudeHooksEngine::new(
         true,
-        false,
+        true,
         Some(&stack),
         Vec::new(),
         Vec::new(),
@@ -242,6 +257,7 @@ fn permission_request_timeout_only_counts_synchronous_handlers() {
     );
     let command = "echo synchronous permission hook";
     let synchronous_handler = ConfiguredHandler {
+        admission_required: false,
         builtin: false,
         plugin_trust: None,
         event_name: HookEventName::PermissionRequest,
@@ -2529,6 +2545,7 @@ fn executor_stop_hook_fixture() -> (
     assert_eq!(
         engine.handlers.as_slice(),
         &[ConfiguredHandler {
+            admission_required: false,
             builtin: true,
             plugin_trust: None,
             event_name: HookEventName::Stop,
@@ -2691,6 +2708,7 @@ async fn executor_stop_hooks_run_unless_regular_hooks_block_without_stopping() {
     );
 
     Arc::make_mut(&mut engine.handlers).push(ConfiguredHandler {
+        admission_required: false,
         builtin: false,
         plugin_trust: None,
         event_name: HookEventName::Stop,
@@ -2727,6 +2745,7 @@ async fn executor_stop_hooks_run_unless_regular_hooks_block_without_stopping() {
     );
 
     Arc::make_mut(&mut engine.handlers).push(ConfiguredHandler {
+        admission_required: false,
         builtin: false,
         plugin_trust: None,
         event_name: HookEventName::Stop,

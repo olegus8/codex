@@ -76,16 +76,17 @@ pub(crate) fn preview(
     .collect()
 }
 
-pub(crate) async fn run(
+struct AdmissionRequirements {
+    required: bool,
+    orders: std::collections::HashSet<i64>,
+    missing: bool,
+}
+
+fn admission_requirements(
     engine: &ClaudeHooksEngine,
-    request: PreToolUseRequest,
-) -> PreToolUseOutcome {
-    let matcher_inputs = common::matcher_inputs(&request.tool_name, &request.matcher_aliases);
-    let matched = dispatcher::select_handlers_for_matcher_inputs(
-        &engine.handlers,
-        HookEventName::PreToolUse,
-        &matcher_inputs,
-    );
+    matcher_inputs: &[&str],
+    matched: &[ConfiguredHandler],
+) -> AdmissionRequirements {
     let requirements = engine
         .required_admission
         .iter()
@@ -106,18 +107,49 @@ pub(crate) async fn run(
     let missing_required = requirements.iter().any(|key| {
         !engine.hook_entries.iter().any(|entry| {
             &entry.key == *key
+                && entry.enabled
+                && matches!(entry.trust_status, codex_protocol::protocol::HookTrustStatus::Trusted | codex_protocol::protocol::HookTrustStatus::Managed)
                 && matched.iter().any(|handler| {
                     handler.display_order == entry.display_order
                         && handler.can_apply_control_effects()
                 })
         })
     });
-    if matched.is_empty() || missing_required {
+    AdmissionRequirements { required, orders: required_orders, missing: missing_required }
+}
+
+pub(crate) fn preview_for_engine(
+    engine: &ClaudeHooksEngine,
+    request: &PreToolUseRequest,
+) -> Vec<HookRunSummary> {
+    if !engine.required_admission.is_empty() {
+        let inputs = common::matcher_inputs(&request.tool_name, &request.matcher_aliases);
+        let matched = dispatcher::select_handlers_for_matcher_inputs(
+            &engine.handlers, HookEventName::PreToolUse, &inputs,
+        );
+        if admission_requirements(engine, &inputs, &matched).missing {
+            return Vec::new();
+        }
+    }
+    preview(&engine.handlers, request)
+}
+
+pub(crate) async fn run(
+    engine: &ClaudeHooksEngine,
+    request: PreToolUseRequest,
+) -> PreToolUseOutcome {
+    let matcher_inputs = common::matcher_inputs(&request.tool_name, &request.matcher_aliases);
+    let mut matched = dispatcher::select_handlers_for_matcher_inputs(
+        &engine.handlers, HookEventName::PreToolUse, &matcher_inputs,
+    );
+    let AdmissionRequirements { required, orders: required_orders, missing } =
+        admission_requirements(engine, &matcher_inputs, &matched);
+    if matched.is_empty() || missing {
         return PreToolUseOutcome {
             hook_events: Vec::new(),
             should_block: required,
             block_reason: required
-                .then(|| "required PreToolUse admission hook is missing".to_string()),
+                .then(|| "required PreToolUse admission handler is unavailable or untrusted".to_string()),
             additional_contexts: Vec::new(),
             updated_input: None,
         };
@@ -142,17 +174,16 @@ pub(crate) async fn run(
         }
     };
 
+    for handler in &mut matched {
+        handler.admission_required = required_orders.contains(&handler.display_order);
+    }
     let results = dispatcher::execute_handlers(
         engine,
         matched,
         &input,
         request.cwd.as_path(),
         Some(request.turn_id.clone()),
-        if required {
-            parse_required_completed
-        } else {
-            parse_completed
-        },
+        parse_completed,
     )
     .await;
 
@@ -249,15 +280,7 @@ fn parse_completed(
     run_result: HandlerRunResult,
     turn_id: Option<String>,
 ) -> dispatcher::ParsedHandler<PreToolUseHandlerData> {
-    parse_completed_with_admission(handler, run_result, turn_id, false)
-}
-
-fn parse_required_completed(
-    handler: &ConfiguredHandler,
-    run_result: HandlerRunResult,
-    turn_id: Option<String>,
-) -> dispatcher::ParsedHandler<PreToolUseHandlerData> {
-    parse_completed_with_admission(handler, run_result, turn_id, true)
+    parse_completed_with_admission(handler, run_result, turn_id, handler.admission_required)
 }
 
 fn parse_completed_with_admission(
@@ -877,6 +900,7 @@ mod tests {
 
     fn handler_with_async(r#async: bool) -> ConfiguredHandler {
         ConfiguredHandler {
+            admission_required: false,
             builtin: false,
             plugin_trust: None,
             event_name: HookEventName::PreToolUse,

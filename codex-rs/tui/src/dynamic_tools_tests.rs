@@ -361,11 +361,10 @@ command = {}
         assert_eq!(loaded.data.len(), if decision == "allow" { 2 } else { 1 });
         assert_eq!(mock.requests().len(), 2);
         if decision == "deny" {
+            let output = mock.requests()[1].function_call_output("native-call-id");
             assert!(
-                mock.requests()[1]
-                    .function_call_output("native-call-id")
-                    .to_string()
-                    .contains("native fixture denied")
+                output.to_string().contains("native fixture denied"),
+                "{tool} via_mcp={via_mcp}: {output}"
             );
         }
         let calls: Vec<Value> = std::fs::read_to_string(home.path().join("native.jsonl"))?

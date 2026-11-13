@@ -49,19 +49,30 @@ pub(crate) fn install(session: &Session, directory: &TempDir, command: Option<&s
     let stack = ConfigLayerStack::new(
         vec![ConfigLayerEntry::new(
             ConfigLayerSource::User {
-                file: config_path,
+                file: config_path.clone(),
                 profile: None,
             },
-            config.parse().unwrap(),
+            toml::from_str(&config).unwrap(),
         )],
         Default::default(),
         Default::default(),
     )
     .unwrap();
+    let listed = codex_hooks::list_hooks(HooksConfig {
+        feature_enabled: true,
+        config_layer_stack: Some(stack.clone()),
+        ..Default::default()
+    });
+    let mut user = stack.get_active_user_layer().unwrap().config.clone();
+    let states = listed.hooks.into_iter().map(|hook| (hook.key, codex_config::HookStateToml {
+        trusted_hash: Some(hook.current_hash), ..Default::default()
+    })).collect::<std::collections::BTreeMap<_, _>>();
+    user["hooks"].as_table_mut().unwrap().insert("state".into(), toml::Value::try_from(states).unwrap());
+    let stack = stack.with_user_config(&config_path, user).unwrap();
     let (hooks, _) = Hooks::new(
         HooksConfig {
             feature_enabled: true,
-            bypass_hook_trust: true,
+            bypass_hook_trust: false,
             config_layer_stack: Some(stack),
             ..Default::default()
         },

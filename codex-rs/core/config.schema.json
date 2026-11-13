@@ -2595,6 +2595,13 @@
           },
           "type": "array"
         },
+        "required_admission": {
+          "description": "Tool matchers requiring explicit admission from synchronous PreToolUse hooks.",
+          "items": {
+            "$ref": "#/definitions/RequiredHookAdmission"
+          },
+          "type": "array"
+        },
         "state": {
           "additionalProperties": {
             "$ref": "#/definitions/HookStateToml"
@@ -4550,6 +4557,23 @@
       },
       "required": [
         "url"
+      ],
+      "type": "object"
+    },
+    "RequiredHookAdmission": {
+      "additionalProperties": false,
+      "properties": {
+        "hook": {
+          "description": "Stable handler key returned by hooks/list.",
+          "type": "string"
+        },
+        "matcher": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "hook",
+        "matcher"
       ],
       "type": "object"
     },

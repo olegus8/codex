@@ -923,6 +923,7 @@ fn append_matcher_groups(
                     ))
             {
                 handlers.push(ConfiguredHandler {
+                    admission_required: false,
                     builtin,
                     plugin_trust,
                     event_name,
@@ -1467,6 +1468,7 @@ mod tests {
         assert_eq!(
             handlers,
             vec![ConfiguredHandler {
+                admission_required: false,
                 builtin: false,
                 plugin_trust: None,
                 event_name: HookEventName::UserPromptSubmit,
@@ -1508,6 +1510,7 @@ mod tests {
         assert_eq!(
             handlers,
             vec![ConfiguredHandler {
+                admission_required: false,
                 builtin: false,
                 plugin_trust: None,
                 event_name: HookEventName::PreToolUse,

@@ -98,6 +98,7 @@ fn error(text: &str) -> HookOutputEntry {
 
 fn handler() -> ConfiguredHandler {
     ConfiguredHandler {
+        admission_required: false,
         builtin: false,
         plugin_trust: None,
         event_name: HookEventName::Interrupt,

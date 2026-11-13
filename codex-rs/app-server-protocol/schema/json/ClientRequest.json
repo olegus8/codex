@@ -2470,6 +2470,24 @@
         }
       ]
     },
+    "NativeToolAdmissionParams": {
+      "additionalProperties": false,
+      "properties": {
+        "callId": {
+          "type": "string"
+        },
+        "operation": true,
+        "threadId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "callId",
+        "operation",
+        "threadId"
+      ],
+      "type": "object"
+    },
     "NetworkAccess": {
       "enum": [
         "restricted",
@@ -7198,6 +7216,30 @@
         "params"
       ],
       "title": "Hooks/listRequest",
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/RequestId"
+        },
+        "method": {
+          "enum": [
+            "item/tool/admission"
+          ],
+          "title": "Item/tool/admissionRequestMethod",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/definitions/NativeToolAdmissionParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "title": "Item/tool/admissionRequest",
       "type": "object"
     },
     {

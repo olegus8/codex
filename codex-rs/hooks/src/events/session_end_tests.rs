@@ -61,6 +61,7 @@ fn session_end_ignores_successful_output() {
 
 fn handler(matcher: Option<&str>) -> ConfiguredHandler {
     ConfiguredHandler {
+        admission_required: false,
         builtin: false,
         plugin_trust: None,
         event_name: HookEventName::SessionEnd,

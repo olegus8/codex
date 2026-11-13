@@ -4351,6 +4351,7 @@ try {
     ]).await;
     let mut builder = test_codex()
         .with_model("gpt-5.6-sol")
+        .with_code_mode_host_program(codex_utils_cargo_bin::cargo_bin("codex-code-mode-host")?)
         .with_model_info_override("gpt-5.6-sol", |model| {
             model.tool_mode = Some(codex_protocol::openai_models::ToolMode::CodeMode);
             model.use_responses_lite = true;

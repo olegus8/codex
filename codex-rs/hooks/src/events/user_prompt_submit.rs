@@ -463,6 +463,7 @@ mod tests {
 
     fn handler_with_async(r#async: bool) -> ConfiguredHandler {
         ConfiguredHandler {
+            admission_required: false,
             builtin: false,
             plugin_trust: None,
             event_name: HookEventName::UserPromptSubmit,

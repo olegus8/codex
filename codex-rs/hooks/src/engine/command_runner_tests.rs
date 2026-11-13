@@ -111,6 +111,7 @@ async fn hook_shell_startup_does_not_stop_on_controlling_terminal() {
             .to_string(),
     )]);
     let handler = ConfiguredHandler {
+        admission_required: false,
         builtin: false,
         plugin_trust: None,
         event_name: HookEventName::SessionStart,
@@ -216,6 +217,7 @@ async fn cmd_shell_runs_quoted_hook_command_path() {
     let command = format!(r#""{}" notify"#, hook_path.display());
     let env = HashMap::new();
     let handler = ConfiguredHandler {
+        admission_required: false,
         builtin: false,
         plugin_trust: None,
         event_name: HookEventName::SessionStart,
@@ -267,6 +269,7 @@ async fn fast_exiting_hook_preserves_stdout_when_stdin_is_not_consumed() {
     let command = "echo hook-ran";
     let env = HashMap::new();
     let handler = ConfiguredHandler {
+        admission_required: false,
         builtin: false,
         plugin_trust: None,
         event_name: HookEventName::SessionStart,
@@ -356,6 +359,7 @@ async fn command_hook_does_not_expose_configured_noise_auth_token() {
         ("CODEX_HOOK_SAFE_ENV".to_string(), "visible".to_string()),
     ]);
     let handler = ConfiguredHandler {
+        admission_required: false,
         builtin: false,
         plugin_trust: None,
         event_name: HookEventName::SessionStart,
@@ -495,6 +499,7 @@ fn write_handler(temp: &TempDir, source: &str) -> ConfiguredHandler {
     let script_path = temp.path().join("async_hook.py");
     std::fs::write(&script_path, source).expect("write async test hook");
     ConfiguredHandler {
+        admission_required: false,
         builtin: false,
         plugin_trust: None,
         event_name: HookEventName::UserPromptSubmit,

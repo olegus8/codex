@@ -63,6 +63,7 @@ pub(crate) struct CommandShell {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ConfiguredHandler {
+    pub admission_required: bool,
     /// Internally admitted cleanup hook, enabled independently of per-hook state.
     pub builtin: bool,
     pub plugin_trust: Option<plugin_trust::PluginHookTrust>,
@@ -440,6 +441,7 @@ impl ClaudeHooksEngine {
                     continue;
                 }
                 handlers.push(ConfiguredHandler {
+                    admission_required: false,
                     builtin: true,
                     plugin_trust: None,
                     event_name,
@@ -480,7 +482,7 @@ impl ClaudeHooksEngine {
     }
 
     pub(crate) fn preview_pre_tool_use(&self, request: &PreToolUseRequest) -> Vec<HookRunSummary> {
-        crate::events::pre_tool_use::preview(&self.handlers, request)
+        crate::events::pre_tool_use::preview_for_engine(self, request)
     }
 
     pub(crate) fn preview_permission_request(

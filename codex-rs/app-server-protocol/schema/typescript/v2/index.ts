@@ -341,6 +341,8 @@ export type { ModelVerification } from "./ModelVerification";
 export type { ModelVerificationNotification } from "./ModelVerificationNotification";
 export type { ModelsRequirements } from "./ModelsRequirements";
 export type { MultiAgentVersion } from "./MultiAgentVersion";
+export type { NativeToolAdmissionParams } from "./NativeToolAdmissionParams";
+export type { NativeToolAdmissionResponse } from "./NativeToolAdmissionResponse";
 export type { NetworkAccess } from "./NetworkAccess";
 export type { NetworkApprovalContext } from "./NetworkApprovalContext";
 export type { NetworkApprovalProtocol } from "./NetworkApprovalProtocol";
