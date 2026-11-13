@@ -94,11 +94,14 @@ def run(binary, directory, mode):
                             pending = pending.replace(query, b"")
                     pending = pending[-128:]
             visible = re.sub(rb"\x1b\[[0-?]*[ -/]*[@-~]", b"", output)
-            if not injected and b"shortcuts" in visible:
+            if not injected and (
+                b"\x1b]7501;state=idle:app=codex\x1b\\" in output
+            ):
                 assert not fixture.requests
                 output.clear()
                 send(payload)
                 injected = True
+                result["injected"] = True
                 deadline = time.monotonic() + 10
             elif injected and not submitted and marker in visible:
                 assert not fixture.requests
@@ -124,7 +127,10 @@ def run(binary, directory, mode):
                 break
         else:
             raise TimeoutError(
-                "waiting for " + ("submission" if submitted else "draft")
+                "waiting for " + (
+                    "submission" if submitted
+                    else "draft" if injected else "startup"
+                )
             )
     except Exception as error:
         result["error"] = repr(error)
