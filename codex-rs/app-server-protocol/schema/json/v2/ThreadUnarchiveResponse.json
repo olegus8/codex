@@ -384,6 +384,30 @@
       ],
       "type": "string"
     },
+    "ContextPause": {
+      "description": "A turn paused at the configured share of the usable context window.",
+      "properties": {
+        "contextWindow": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "thresholdPercent": {
+          "format": "uint8",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "usedTokens": {
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "contextWindow",
+        "thresholdPercent",
+        "usedTokens"
+      ],
+      "type": "object"
+    },
     "DynamicToolCallOutputContentItem": {
       "oneOf": [
         {
@@ -2476,6 +2500,17 @@
             "integer",
             "null"
           ]
+        },
+        "contextPause": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ContextPause"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The pause that ended this turn, if one occurred."
         },
         "durationMs": {
           "description": "Duration between turn start and completion in milliseconds, if known.",

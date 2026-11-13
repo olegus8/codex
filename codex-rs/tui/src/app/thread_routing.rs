@@ -1507,6 +1507,7 @@ impl App {
         if !turns.is_empty() {
             self.chat_widget.set_token_info(/*info*/ None);
         }
+        let waiting_context_pause = session.waiting_context_pause.clone();
         match presentation {
             ThreadAttachPresentation::Fresh
             | ThreadAttachPresentation::FreshWithDraft
@@ -1530,6 +1531,8 @@ impl App {
 
         self.chat_widget
             .replay_thread_turns(turns, ReplayKind::ResumeInitialMessages);
+        self.chat_widget
+            .restore_context_pause(waiting_context_pause.as_ref());
         if should_buffer_initial_replay {
             self.app_event_tx
                 .send(AppEvent::EndInitialHistoryReplayBuffer);
@@ -1787,6 +1790,10 @@ impl App {
             .session
             .as_ref()
             .is_some_and(|session| session.collaboration_mode.is_some());
+        let waiting_context_pause = snapshot
+            .session
+            .as_ref()
+            .map(|session| session.waiting_context_pause.clone());
         if let Some(session) = snapshot.session {
             if session.reasoning_effort != Some(ReasoningEffortConfig::Ultra) {
                 self.chat_widget
@@ -1849,6 +1856,10 @@ impl App {
         if !snapshot.turns.is_empty() {
             self.chat_widget
                 .replay_thread_turns(snapshot.turns, ReplayKind::ThreadSnapshot);
+        }
+        if let Some(waiting_context_pause) = waiting_context_pause {
+            self.chat_widget
+                .restore_context_pause(waiting_context_pause.as_ref());
         }
         for (event, changes) in snapshot.events.into_iter().zip(request_changes) {
             reasoning_replay.before_event(&event, &mut self.chat_widget);

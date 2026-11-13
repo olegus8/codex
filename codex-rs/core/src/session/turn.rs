@@ -9,6 +9,7 @@ use crate::client::ModelClientSession;
 use crate::client_common::Prompt;
 use crate::client_common::ResponseEvent;
 use crate::compact::AutoCompactionDisabled;
+use crate::compact::automatic_compaction_configured;
 use crate::compact::run_inline_auto_compact_task;
 use crate::compact_remote_v2::BackgroundCompactionCandidate;
 use crate::compact_remote_v2::run_inline_remote_auto_compact_task as run_inline_remote_auto_compact_task_v2;
@@ -41,6 +42,7 @@ use crate::responses_retry::ResponsesStreamRetryState;
 use crate::responses_retry::handle_response_stream_error;
 use crate::session::PreviousTurnSettings;
 use crate::session::TurnInput;
+use crate::session::context_window::ContextWindowTokenStatus;
 use crate::session::daemon_recovery::RecordedTurnInput;
 use crate::session::session::Session;
 use crate::session::step_context::StepContext;
@@ -197,11 +199,13 @@ pub(crate) async fn run_turn(
             Ok(_) => Err(uploaded_audio_disabled_error()),
         };
     }
-    let auto_compaction_enabled = sess
+    let thread_auto_compaction_enabled = sess
         .services
         .thread_extension_data
         .get::<AutoCompactionDisabled>()
         .is_none();
+    let auto_compaction_enabled =
+        thread_auto_compaction_enabled && automatic_compaction_configured(&turn_context);
     let auto_summarization_enabled =
         auto_compaction_enabled && !turn_context.config.features.enabled(Feature::TokenBudget);
     if crate::guardian::is_basic_session_source(&turn_context.session_source) {
@@ -561,6 +565,21 @@ pub(crate) async fn run_turn(
                 .await?
             }
         };
+        if turn_context.config.model_context_pause_percent.is_some() {
+            let token_status =
+                super::context_window::context_window_token_status(&sess, &turn_context).await;
+            if super::context_pause::maybe_pause(&sess, &turn_context, &token_status).await {
+                finish_context_paused_turn(
+                    &sess,
+                    &step_context,
+                    stop_hook_active,
+                    Vec::new(),
+                    last_agent_message.clone(),
+                )
+                .await;
+                break;
+            }
+        }
         let sampling_request_result: CodexResult<_> = async {
             super::time_reminder::maybe_record_current_time_reminder(
                 sess.as_ref(),
@@ -591,6 +610,27 @@ pub(crate) async fn run_turn(
                 .clone_history()
                 .instrument(trace_span!("run_turn.prepare_sampling_request_input"))
                 .await;
+            if !automatic_compaction_configured(&turn_context)
+                && let Some(usable_window) =
+                    step_context.settings.model_info.usable_context_window()
+            {
+                let used_tokens = if sampling_request_input
+                    .token_info()
+                    .is_some_and(|info| info.last_token_usage.total_tokens > 0)
+                {
+                    sampling_request_input.get_reported_token_usage()
+                } else {
+                    let base_instructions = sess.get_prompt_base_instructions().await;
+                    sampling_request_input
+                        .estimate_token_count_with_base_instructions(&base_instructions)
+                        .unwrap_or_default()
+                };
+                if used_tokens >= usable_window {
+                    super::context_window::record_exhaustion(&sess, &turn_context, usable_window)
+                        .await;
+                    return Err(CodexErr::ContextWindowExceeded);
+                }
+            }
 
             run_sampling_request(
                 Arc::clone(&sess),
@@ -610,6 +650,7 @@ pub(crate) async fn run_turn(
                 let SamplingRequestResult {
                     needs_follow_up: model_needs_follow_up,
                     last_agent_message: sampling_request_last_agent_message,
+                    pause_at_item,
                 } = sampling_request_output;
                 if model_needs_follow_up {
                     sess.input_queue
@@ -625,15 +666,29 @@ pub(crate) async fn run_turn(
                 let (has_pending_input, token_status) = async {
                     let has_pending_input =
                         sess.input_queue.has_pending_input(&sess.active_turn).await;
-                    let token_status = super::context_window::context_window_token_status(
-                        sess.as_ref(),
-                        turn_context.as_ref(),
-                    )
-                    .await;
+                    let token_status = match pause_at_item {
+                        Some(status) => status,
+                        None => {
+                            super::context_window::context_window_token_status(&sess, &turn_context)
+                                .await
+                        }
+                    };
                     (has_pending_input, token_status)
                 }
                 .instrument(trace_span!("run_turn.collect_post_sampling_state"))
                 .await;
+                if super::context_pause::maybe_pause(&sess, &turn_context, &token_status).await {
+                    last_agent_message = sampling_request_last_agent_message;
+                    finish_context_paused_turn(
+                        &sess,
+                        &step_context,
+                        stop_hook_active,
+                        notify_messages,
+                        last_agent_message.clone(),
+                    )
+                    .await;
+                    break;
+                }
                 let needs_follow_up = model_needs_follow_up || has_pending_input;
                 let token_limit_reached = token_status.token_limit_reached;
 
@@ -694,8 +749,9 @@ pub(crate) async fn run_turn(
                     && (sess.take_new_context_window_request().await
                         || token_limit_reached
                         || candidate.is_some());
-                if auto_compaction_enabled {
-                    let allow_auto_compact_fallback = !should_roll_over && !token_limit_reached;
+                if thread_auto_compaction_enabled {
+                    let allow_auto_compact_fallback =
+                        auto_compaction_enabled && !should_roll_over && !token_limit_reached;
                     super::token_budget::maybe_record(
                         sess.as_ref(),
                         turn_context.as_ref(),
@@ -1487,7 +1543,39 @@ async fn run_pre_sampling_compact(
     Ok(())
 }
 
-/// Returns true only when both turns declare compaction compatibility hashes and they differ.
+async fn finish_context_paused_turn(
+    sess: &Arc<Session>,
+    step_context: &Arc<StepContext>,
+    stop_hook_active: bool,
+    notify_messages: Vec<String>,
+    last_agent_message: Option<String>,
+) {
+    let outcome = run_turn_stop_hooks(
+        sess,
+        step_context,
+        stop_hook_active,
+        last_agent_message.clone(),
+    )
+    .await;
+    if outcome.should_block {
+        sess.send_event(
+            &step_context.turn,
+            EventMsg::Warning(WarningEvent {
+                message: "Context paused; the Stop hook's continuation was not run.".to_string(),
+            }),
+        )
+        .await;
+    }
+    run_legacy_after_agent_hook(
+        sess,
+        &step_context.turn,
+        notify_messages,
+        last_agent_message,
+    )
+    .await;
+}
+
+/// Returns true when both turns declare different compaction hashes.
 /// A missing hash does not provide enough information to trigger compaction.
 fn comp_hash_changed(previous: Option<&str>, current: Option<&str>) -> bool {
     previous
@@ -1837,6 +1925,7 @@ async fn run_sampling_request(
         incremental_tools,
     );
     let mut retry_state = ResponsesStreamRetryState::default();
+    let mut consecutive_server_errors = 0;
     let mut initial_input = Some(input);
     let mut notify_messages = Vec::new();
     let mut executed_tool_calls_by_output = HashMap::new();
@@ -1856,6 +1945,17 @@ async fn run_sampling_request(
                 sess.services.image_store.as_ref(),
             )
             .await;
+        {
+            let state = sess.state.lock().await;
+            if !state.omitted_reasoning_ids.is_empty() {
+                prompt_input.retain(|item| match item {
+                    ResponseItem::Reasoning { id: Some(id), .. } => {
+                        !state.omitted_reasoning_ids.contains(id)
+                    }
+                    _ => true,
+                });
+            }
+        }
         sess.services
             .executed_tool_calls
             .attach_to_prompt(&mut prompt_input, &mut executed_tool_calls_by_output);
@@ -1901,7 +2001,18 @@ async fn run_sampling_request(
             }
             Err(err) => match err.details() {
                 CodexErrorDetails::ContextWindowExceeded => {
-                    sess.set_total_tokens_full(&turn_context).await;
+                    if automatic_compaction_configured(&turn_context) {
+                        sess.set_total_tokens_full(&turn_context).await;
+                    } else if let Some(usable_window) =
+                        step_context.settings.model_info.usable_context_window()
+                    {
+                        super::context_window::record_exhaustion(
+                            &sess,
+                            &turn_context,
+                            usable_window,
+                        )
+                        .await;
+                    }
                     return Err(err);
                 }
                 CodexErrorDetails::UsageLimitReached(e) => {
@@ -1914,6 +2025,20 @@ async fn run_sampling_request(
                 _ => err,
             },
         };
+
+        if matches!(err.details(), CodexErrorDetails::ServerErrorBeforeOutput(_)) {
+            consecutive_server_errors += 1;
+            if consecutive_server_errors == 2 {
+                let omitted = sess.state.lock().await.omit_past_reasoning();
+                warn!(
+                    turn_id = %turn_context.sub_id,
+                    omitted,
+                    "server repeatedly failed the request; omitting past reasoning"
+                );
+            }
+        } else {
+            consecutive_server_errors = 0;
+        }
 
         let retry = handle_response_stream_error(
             &mut retry_state,
@@ -1937,6 +2062,7 @@ async fn run_sampling_request(
                 SamplingRequestResult {
                     needs_follow_up: true,
                     last_agent_message: None,
+                    pause_at_item: None,
                 },
                 notify_messages,
             ));
@@ -2086,6 +2212,7 @@ pub(crate) async fn built_tools(
 struct SamplingRequestResult {
     needs_follow_up: bool,
     last_agent_message: Option<String>,
+    pause_at_item: Option<ContextWindowTokenStatus>,
 }
 
 /// Ephemeral per-response state for streaming a single proposed plan.
@@ -2903,8 +3030,27 @@ async fn try_run_sampling_request(
     let defer_streamed_turn_items_for_contributors =
         !sess.services.extensions.turn_item_contributors().is_empty();
     let mut active_item_is_streaming_to_client = false;
+    let mut received_output = false;
     let receiving_span = trace_span!("receiving_stream");
+    let pause_during_stream = super::context_pause::can_pause(&sess, &turn_context).await;
+    let mut check_pause_after_item = false;
     let outcome: CodexResult<SamplingRequestResult> = loop {
+        if std::mem::take(&mut check_pause_after_item) && !cancellation_token.is_cancelled() {
+            let status = super::context_window::context_window_token_status_for_sampling_model(
+                &sess,
+                &turn_context,
+                &step_context.settings.model_info,
+            )
+            .await;
+            if super::context_pause::reached_threshold(&turn_context, &status).is_some() {
+                // Keep the usage at this boundary while admitted tools finish.
+                break Ok(SamplingRequestResult {
+                    needs_follow_up,
+                    last_agent_message,
+                    pause_at_item: Some(status),
+                });
+            }
+        }
         let handle_responses = trace_span!(
             parent: &receiving_span,
             "handle_responses",
@@ -2955,6 +3101,7 @@ async fn try_run_sampling_request(
                 break Ok(SamplingRequestResult {
                     needs_follow_up: true,
                     last_agent_message,
+                    pause_at_item: None,
                 });
             }
             Err(_) => break Err(CodexErr::TurnAborted),
@@ -2984,12 +3131,28 @@ async fn try_run_sampling_request(
                     .await;
                     should_emit_token_count |= incomplete.token_usage.is_some();
                 }
-                if *draining_for_mailbox && matches!(err.details(), CodexErrorDetails::Stream(_)) {
+                if *draining_for_mailbox
+                    && matches!(
+                        err.details(),
+                        CodexErrorDetails::Stream(_)
+                            | CodexErrorDetails::ServerErrorBeforeOutput(_)
+                    )
+                {
                     // Mail already requires a follow-up, even if the producer exited before
                     // receiving the interrupt. Do not retry without that pending input.
                     break Ok(SamplingRequestResult {
                         needs_follow_up: true,
                         last_agent_message,
+                        pause_at_item: None,
+                    });
+                }
+                if received_output
+                    && let CodexErrorDetails::ServerErrorBeforeOutput(message) = err.details()
+                {
+                    let stream_error = CodexErr::Stream(message.clone());
+                    break Err(match err.retry_after() {
+                        Some(retry_after) => stream_error.with_retry_after(retry_after),
+                        None => stream_error,
                     });
                 }
                 break Err(err);
@@ -3001,6 +3164,16 @@ async fn try_run_sampling_request(
             .record_responses(&handle_responses, &event);
         record_turn_ttft_metric(&turn_context, &event).await;
 
+        received_output |= matches!(
+            &event,
+            ResponseEvent::OutputItemAdded(_)
+                | ResponseEvent::OutputItemDone(_)
+                | ResponseEvent::OutputTextDelta(_)
+                | ResponseEvent::ToolCallInputDelta { .. }
+                | ResponseEvent::ReasoningSummaryDelta { .. }
+                | ResponseEvent::ReasoningSummaryDone { .. }
+                | ResponseEvent::ReasoningContentDelta { .. }
+        );
         match event {
             ResponseEvent::Created { response_id } => {
                 response_id_for_assessment.clone_from(&response_id);
@@ -3017,6 +3190,7 @@ async fn try_run_sampling_request(
                 }
             }
             ResponseEvent::OutputItemDone(mut item) => {
+                check_pause_after_item = pause_during_stream;
                 // Serving emits one final value immediately before this item's completion.
                 // After this handoff, the invocation/cell owns it independently of the stream.
                 let assessment = pending_assessment
@@ -3181,6 +3355,7 @@ async fn try_run_sampling_request(
                     break Ok(SamplingRequestResult {
                         needs_follow_up: true,
                         last_agent_message,
+                        pause_at_item: None,
                     });
                 }
             }
@@ -3382,6 +3557,7 @@ async fn try_run_sampling_request(
                 break Ok(SamplingRequestResult {
                     needs_follow_up,
                     last_agent_message,
+                    pause_at_item: None,
                 });
             }
             ResponseEvent::OutputTextDelta(delta) => {
@@ -3533,7 +3709,11 @@ async fn try_run_sampling_request(
             }
         }
     };
-    if cancellation_token.is_cancelled() && !response_completed && can_interrupt {
+    let paused_stream = outcome
+        .as_ref()
+        .is_ok_and(|result| result.pause_at_item.is_some());
+    if (cancellation_token.is_cancelled() || paused_stream) && !response_completed && can_interrupt
+    {
         let deadline = tokio::time::Instant::now() + Duration::from_secs(1);
         if let Some(interrupt) = stream.interrupt.take() {
             let _ = interrupt.send(codex_api::ResponseInterrupt::Cancel { deadline });

@@ -4,6 +4,7 @@ use std::sync::Arc;
 use chrono::DateTime;
 use chrono::Utc;
 use codex_app_server_protocol::CodexErrorInfo;
+use codex_app_server_protocol::ContextPause;
 use codex_app_server_protocol::ThreadTimelineEntry;
 use codex_protocol::SanitizedGitUrl;
 use codex_protocol::SessionId;
@@ -473,6 +474,8 @@ pub struct StoredTurn {
     pub completed_at: Option<i64>,
     /// Duration between turn start and completion in milliseconds, if known.
     pub duration_ms: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context_pause: Option<ContextPause>,
 }
 
 /// A page of stored turns.

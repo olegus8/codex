@@ -1,0 +1,7 @@
+---
+source: tui/src/chatwidget/tests/context_policy_tests.rs
+expression: render_bottom_popup(&chat, 80)
+---
+› Ask Codex to do anything
+
+  Context 30% left

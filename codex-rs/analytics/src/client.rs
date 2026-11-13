@@ -963,6 +963,7 @@ fn session_event_to_analytics_notification(
 
 fn analytics_turn(turn_id: &str, status: TurnStatus) -> Turn {
     Turn {
+        context_pause: None,
         id: turn_id.to_string(),
         root_turn_id: None,
         items: Vec::new(),

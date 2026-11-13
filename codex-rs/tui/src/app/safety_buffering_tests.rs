@@ -3,6 +3,7 @@ use codex_app_server_protocol::TurnItemsView;
 
 fn turn(id: &str, status: TurnStatus) -> Turn {
     Turn {
+        context_pause: None,
         id: id.to_string(),
         root_turn_id: None,
         items: Vec::new(),

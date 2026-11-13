@@ -22,6 +22,7 @@ use serde_json::Value;
 pub fn map_api_error(err: ApiError) -> CodexErr {
     let retry_after = match &err {
         ApiError::Retryable { retry_after, .. }
+        | ApiError::ServerErrorBeforeOutput { retry_after, .. }
         | ApiError::RateLimitExceeded { retry_after, .. }
         | ApiError::ServerOverloaded { retry_after }
         | ApiError::PolicyCapacityUnavailable { retry_after }
@@ -57,6 +58,9 @@ fn map_api_error_details(err: ApiError) -> CodexErr {
         ApiError::QuotaExceeded => CodexErr::QuotaExceeded,
         ApiError::UsageNotIncluded => CodexErr::UsageNotIncluded,
         ApiError::Retryable { message, .. } => CodexErr::Stream(message),
+        ApiError::ServerErrorBeforeOutput { message, .. } => {
+            CodexErr::new(CodexErrorDetails::ServerErrorBeforeOutput(message))
+        }
         ApiError::RateLimitExceeded { message, .. } => {
             CodexErr::new(CodexErrorDetails::RateLimitExceeded(message))
         }

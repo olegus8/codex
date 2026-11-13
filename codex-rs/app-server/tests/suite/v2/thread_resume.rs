@@ -114,6 +114,7 @@ use codex_protocol::protocol::TokenUsage;
 use codex_protocol::protocol::TokenUsageInfo;
 use codex_protocol::protocol::TurnAbortReason;
 use codex_protocol::protocol::TurnAbortedEvent;
+use codex_protocol::protocol::TurnCompleteEvent;
 use codex_protocol::protocol::TurnStartedEvent;
 use codex_protocol::user_input::ByteRange;
 use codex_protocol::user_input::TextElement;
@@ -4213,6 +4214,85 @@ async fn thread_resume_emits_restored_token_usage_before_next_turn() -> Result<(
 }
 
 #[tokio::test]
+async fn cold_paginated_resume_returns_the_saved_context_pause() -> Result<()> {
+    let server = create_mock_responses_server_repeating_assistant("Done").await;
+    let codex_home = TempDir::new()?;
+    mock_responses_config(&server.uri()).write(codex_home.path())?;
+    let timestamp = "2025-01-05T12-00-00";
+    let thread_id = create_fake_paginated_rollout(
+        codex_home.path(),
+        timestamp,
+        "2025-01-05T12:00:00Z",
+        "Saved user message",
+        Some("mock_provider"),
+        /*git_info*/ None,
+    )?;
+    let path = rollout_path(codex_home.path(), timestamp, &thread_id);
+    let pause = codex_protocol::protocol::ContextPause {
+        thread_id: ThreadId::from_string(&thread_id)?,
+        used_tokens: 140_000,
+        context_window: 190_000,
+        threshold_percent: 70,
+        resumed_by_user: false,
+    };
+    for item in [
+        RolloutItem::EventMsg(EventMsg::TurnStarted(TurnStartedEvent {
+            turn_id: "paused-turn".to_string(),
+            turn_attribution: None,
+            root_turn_id: None,
+            trace_id: None,
+            started_at: None,
+            model_context_window: None,
+            collaboration_mode_kind: Default::default(),
+        })),
+        RolloutItem::EventMsg(EventMsg::TurnComplete(TurnCompleteEvent {
+            context_pause: Some(pause.clone()),
+            turn_id: "paused-turn".to_string(),
+            root_turn_id: None,
+            last_agent_message: None,
+            error: None,
+            started_at: None,
+            completed_at: None,
+            duration_ms: None,
+            time_to_first_token_ms: None,
+        })),
+    ] {
+        append_rollout_item_to_path(&path, &item).await?;
+    }
+    let mut app_server = TestAppServer::builder()
+        .with_codex_home(codex_home.path())
+        .build_initialized()
+        .await?;
+    let response: ThreadResumeResponse = app_server
+        .request(|request_id| ClientRequest::ThreadResume {
+            request_id,
+            params: ThreadResumeParams {
+                thread_id,
+                exclude_turns: true,
+                initial_turns_page: Some(ThreadResumeInitialTurnsPageParams {
+                    limit: Some(1),
+                    sort_direction: Some(SortDirection::Desc),
+                    items_view: Some(TurnItemsView::NotLoaded),
+                }),
+                ..Default::default()
+            },
+        })
+        .await?;
+    let page = response.initial_turns_page.expect("initial turns page");
+    assert_eq!(page.data[0].id, "paused-turn");
+    let pause = pause.into();
+    assert_eq!(page.data[0].context_pause.as_ref(), Some(&pause));
+    assert_eq!(
+        response
+            .waiting_context_pause
+            .expect("restored context pause")
+            .details,
+        Some(pause),
+    );
+    Ok(())
+}
+
+#[tokio::test]
 async fn cold_paginated_resume_restores_usage_without_loading_turns() -> Result<()> {
     let server = create_mock_responses_server_repeating_assistant("Done").await;
     let codex_home = TempDir::new()?;
@@ -4244,6 +4324,7 @@ async fn cold_paginated_resume_restores_usage_without_loading_turns() -> Result<
         &path,
         &RolloutItem::EventMsg(EventMsg::TokenCount(TokenCountEvent {
             info: Some(TokenUsageInfo {
+                context_window_usage: None,
                 total_token_usage: TokenUsage {
                     input_tokens: 120,
                     output_tokens: 30,
@@ -4358,6 +4439,7 @@ async fn cold_paginated_resume_omits_usage_when_its_turn_is_ambiguous() -> Resul
         &path,
         &RolloutItem::EventMsg(EventMsg::TokenCount(TokenCountEvent {
             info: Some(TokenUsageInfo {
+                context_window_usage: None,
                 total_token_usage: TokenUsage {
                     total_tokens: 150,
                     ..Default::default()
@@ -4638,6 +4720,7 @@ async fn thread_resume_token_usage_replay_can_belong_to_interrupted_turn() -> Re
             "type": "event_msg",
             "payload": serde_json::to_value(EventMsg::TokenCount(TokenCountEvent {
                 info: Some(TokenUsageInfo {
+                    context_window_usage: None,
                     total_token_usage: TokenUsage {
                         input_tokens: 180,
                         cached_input_tokens: 40,

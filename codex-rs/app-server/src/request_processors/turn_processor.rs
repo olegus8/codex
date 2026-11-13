@@ -753,6 +753,7 @@ impl TurnRequestProcessor {
             .record_request_turn_id(&request_id, &turn_id)
             .await;
         let turn = Turn {
+            context_pause: None,
             id: turn_id,
             root_turn_id: Some(root_turn_id),
             items: vec![],
@@ -1455,6 +1456,7 @@ impl TurnRequestProcessor {
         });
 
         Turn {
+            context_pause: None,
             id: turn_id,
             root_turn_id: None,
             items: vec![item],

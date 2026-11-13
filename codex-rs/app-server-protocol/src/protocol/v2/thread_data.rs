@@ -1,4 +1,5 @@
 use super::CodexErrorInfo;
+use super::ContextPause;
 use super::ThreadEnvironment;
 use super::ThreadItem;
 use super::ThreadItemPayload;
@@ -408,6 +409,10 @@ pub struct Turn {
     /// Duration between turn start and completion in milliseconds, if known.
     #[ts(type = "number | null")]
     pub duration_ms: Option<i64>,
+    /// The pause that ended this turn, if one occurred.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub context_pause: Option<ContextPause>,
 }
 
 impl Turn {

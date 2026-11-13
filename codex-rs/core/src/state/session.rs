@@ -2,7 +2,6 @@
 
 use codex_protocol::dynamic_tools::DynamicToolSpec;
 use codex_protocol::models::BaseInstructionsProvenance;
-#[cfg(test)]
 use codex_protocol::models::ResponseItem;
 use codex_protocol::openai_models::ReasoningEffort;
 use std::collections::HashSet;
@@ -17,11 +16,13 @@ use crate::TurnStartOptions;
 use crate::context_manager::ContextManager;
 use crate::context_manager::HistoryReplacement;
 use crate::session::PreviousTurnSettings;
+use crate::session::context_pause::ContextPauseState;
 use crate::session::session::SessionConfiguration;
 use crate::session::startup_prewarm::SessionStartupPrewarmHandle;
 use crate::session::time_reminder::CurrentTimeReminderState;
 use codex_history::ResponseItemEnvelope;
 use codex_history::TurnAttribution;
+use codex_protocol::ResponseItemId;
 use codex_protocol::SessionId;
 use codex_protocol::ThreadId;
 use codex_protocol::protocol::RateLimitSnapshot;
@@ -77,10 +78,12 @@ pub(crate) struct SessionState {
     /// Persisted origin of the session base instructions, when known.
     pub(crate) base_instructions_provenance: Option<BaseInstructionsProvenance>,
     pub(crate) history: ContextManager,
+    pub(crate) context_pause: ContextPauseState,
     /// Cancels work bound to discarded history or a superseded Guardian evidence policy.
     pub(crate) history_reset: CancellationToken,
     pub(crate) latest_rate_limits: Option<RateLimitSnapshot>,
     pub(crate) latest_token_usage_record: Option<TokenUsageRecord>,
+    pub(crate) omitted_reasoning_ids: HashSet<ResponseItemId>,
     pub(crate) mcp_dependency_prompted: HashSet<String>,
     pub(crate) additional_context: AdditionalContextStore,
     /// Settings used by the latest regular user turn, used for turn-to-turn
@@ -132,9 +135,11 @@ impl SessionState {
             session_configuration,
             base_instructions_provenance: None,
             history,
+            context_pause: ContextPauseState::default(),
             history_reset: CancellationToken::new(),
             latest_rate_limits: None,
             latest_token_usage_record: None,
+            omitted_reasoning_ids: HashSet::new(),
             mcp_dependency_prompted: HashSet::new(),
             additional_context: AdditionalContextStore::default(),
             previous_turn_settings: None,
@@ -183,6 +188,16 @@ impl SessionState {
 
     pub(crate) fn clone_history(&self) -> ContextManager {
         self.history.clone()
+    }
+
+    pub(crate) fn omit_past_reasoning(&mut self) -> usize {
+        let before = self.omitted_reasoning_ids.len();
+        self.omitted_reasoning_ids
+            .extend(self.history.raw_items().filter_map(|item| match item {
+                ResponseItem::Reasoning { id, .. } => id.clone(),
+                _ => None,
+            }));
+        self.omitted_reasoning_ids.len() - before
     }
 
     #[cfg(test)]
@@ -386,6 +401,10 @@ impl SessionState {
 
     pub(crate) fn get_total_token_usage(&self) -> i64 {
         self.history.get_total_token_usage()
+    }
+
+    pub(crate) fn get_reported_token_usage(&self) -> i64 {
+        self.history.get_reported_token_usage()
     }
 
     pub(crate) fn record_mcp_dependency_prompted<I>(&mut self, names: I)

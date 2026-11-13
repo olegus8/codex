@@ -478,6 +478,7 @@ pub(super) fn make_token_info(total_tokens: i64, context_window: i64) -> TokenUs
     }
 
     TokenUsageInfo {
+        context_window_usage: None,
         total_token_usage: usage(total_tokens),
         last_token_usage: usage(total_tokens),
         model_context_window: Some(context_window),
@@ -512,6 +513,7 @@ pub(super) fn handle_token_count(chat: &mut ChatWidget, info: Option<TokenUsageI
                             .clone()
                             .unwrap_or_else(|| "turn-1".to_string()),
                         token_usage: codex_app_server_protocol::ThreadTokenUsage {
+                            context_window_usage: info.context_window_usage,
                             total: token_usage_breakdown(info.total_token_usage),
                             last: token_usage_breakdown(info.last_token_usage),
                             model_context_window: info.model_context_window,
@@ -1137,6 +1139,7 @@ pub(super) fn app_server_turn(
     error: Option<AppServerTurnError>,
 ) -> AppServerTurn {
     AppServerTurn {
+        context_pause: None,
         id: turn_id.to_string(),
         root_turn_id: None,
         items_view: codex_app_server_protocol::TurnItemsView::Full,
