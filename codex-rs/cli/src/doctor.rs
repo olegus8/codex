@@ -2473,9 +2473,7 @@ fn websocket_error_detail(err: &ApiError) -> String {
         | ApiError::FlexUnavailable
         | ApiError::ServerOverloaded { .. }
         | ApiError::PolicyCapacityUnavailable { .. } => format!("handshake error: {err}"),
-        ApiError::Retryable { .. } | ApiError::ServerErrorBeforeOutput { .. } => {
-            "handshake error: retryable error: [redacted]".to_string()
-        }
+        ApiError::Retryable { .. } => "handshake error: retryable error: [redacted]".to_string(),
         ApiError::RateLimitExceeded { .. } => {
             "handshake error: rate limit exceeded: [redacted]".to_string()
         }
