@@ -93,36 +93,6 @@ async fn context_policy_pause_preserves_queue_and_accepts_handoff() {
 }
 
 #[tokio::test]
-async fn context_policy_usage_uses_runtime_accounting() {
-    let (mut chat, mut rx, _ops) = make_chatwidget_manual(/*model_override*/ None).await;
-    chat.local_settings.tui.status_line = Some(vec!["context-remaining".into()]);
-    let mut info = make_token_info(
-        /*total_tokens*/ 120_000, /*context_window*/ 200_000,
-    );
-    info.context_window_usage = Some(ContextWindowUsage {
-        used_tokens: 133_000,
-        context_window: 190_000,
-    });
-    handle_token_count(&mut chat, Some(info));
-    assert_eq!(chat.status_line_context_remaining_percent(), Some(30));
-    assert_eq!(chat.status_line_context_used_percent(), Some(70));
-    assert_eq!(chat.status_line_context_window_size(), Some(190_000));
-    chat.refresh_status_line();
-    assert_chatwidget_snapshot!(
-        "context_policy_usage_footer",
-        render_bottom_popup(&chat, /*width*/ 80),
-    );
-    chat.dispatch_command(SlashCommand::Status);
-    let history: Vec<_> = drain_insert_history(&mut rx)
-        .into_iter()
-        .flatten()
-        .collect();
-    let status = lines_to_single_string(&history);
-    assert!(status.contains("30% left"), "{status}");
-    assert!(status.contains("133K used / 190K"), "{status}");
-}
-
-#[tokio::test]
 async fn context_policy_exhaustion_keeps_queued_work() {
     let (mut chat, mut rx, mut ops) = make_chatwidget_manual(/*model_override*/ None).await;
     chat.thread_id = Some(ThreadId::new());

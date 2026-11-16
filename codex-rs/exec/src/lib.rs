@@ -132,8 +132,6 @@ pub use exec_events::CollabToolCallItem;
 pub use exec_events::CollabToolCallStatus;
 pub use exec_events::CommandExecutionItem;
 pub use exec_events::CommandExecutionStatus;
-pub use exec_events::ContextPause;
-pub use exec_events::ContextWindowUsage;
 pub use exec_events::ErrorItem;
 pub use exec_events::FileChangeItem;
 pub use exec_events::FileUpdateChange;

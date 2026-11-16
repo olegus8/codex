@@ -62,28 +62,6 @@ pub(crate) struct TokenUsageInfo {
     pub(crate) model_context_window: Option<i64>,
 }
 
-impl TokenUsageInfo {
-    pub(crate) fn context_window_size(&self) -> Option<i64> {
-        self.context_window_usage
-            .as_ref()
-            .map(|usage| usage.context_window)
-            .or(self.model_context_window)
-    }
-
-    pub(crate) fn runtime_context_remaining_percent(&self) -> Option<i64> {
-        let usage = self.context_window_usage.as_ref()?;
-        if usage.context_window <= 0 {
-            return Some(0);
-        }
-        let remaining = usage.context_window.saturating_sub(usage.used_tokens);
-        Some(
-            (100.0 * remaining as f64 / usage.context_window as f64)
-                .clamp(0.0, 100.0)
-                .round() as i64,
-        )
-    }
-}
-
 impl fmt::Display for TokenUsage {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(

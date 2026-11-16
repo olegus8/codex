@@ -1,5 +1,5 @@
 import { CodexOptions } from "./codexOptions";
-import { ContextPause, ThreadEvent, ThreadError, Usage } from "./events";
+import { ThreadEvent, ThreadError, Usage } from "./events";
 import { CodexExec } from "./exec";
 import { ThreadItem } from "./items";
 import { ThreadOptions } from "./threadOptions";
@@ -11,7 +11,6 @@ export type Turn = {
   items: ThreadItem[];
   finalResponse: string;
   usage: Usage | null;
-  contextPause?: ContextPause;
 };
 
 /** Alias for `Turn` to describe the result of `run()`. */
@@ -122,7 +121,6 @@ export class Thread {
     const items: ThreadItem[] = [];
     let finalResponse: string = "";
     let usage: Usage | null = null;
-    let contextPause: ContextPause | undefined;
     let turnFailure: ThreadError | null = null;
     for await (const event of generator) {
       if (event.type === "item.completed") {
@@ -132,7 +130,6 @@ export class Thread {
         items.push(event.item);
       } else if (event.type === "turn.completed") {
         usage = event.usage;
-        contextPause = event.context_pause;
       } else if (event.type === "turn.failed") {
         turnFailure = event.error;
         break;
@@ -141,11 +138,7 @@ export class Thread {
     if (turnFailure) {
       throw new Error(turnFailure.message);
     }
-    const result: Turn = { items, finalResponse, usage };
-    if (contextPause) {
-      result.contextPause = contextPause;
-    }
-    return result;
+    return { items, finalResponse, usage };
   }
 }
 
