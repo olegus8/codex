@@ -13,7 +13,7 @@ Successful scenarios are skipped when repeated with identical inputs.
 After a failure or changed inputs, use a new output directory.
 
 Check each scenario's result, requests, events and saved history; terminal
-scenarios also save their screen. On unmodified rust-v0.167.2, run
+scenarios also save their screen. On unmodified rust-v0.171.0, run
 --only '^(lifecycle-native-direct$|default-|manual-|guard-)'.
 lifecycle-native-direct must fail at the pause request count. The six
 default, manual and guard checks must pass. Run all scenarios on the
