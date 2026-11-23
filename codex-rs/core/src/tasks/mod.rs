@@ -799,9 +799,14 @@ impl Session {
                 (None, None, Some(err))
             }
         };
-        // A late steer cannot reopen the stopped rollout after the turn loop has finished.
+        // A late steer cannot reopen the stopped rollout after the turn loop has finished
+        // or a turn that ended at its context pause.
         let can_continue = regular_output.is_some()
             && turn_context.terminal_error.lock().await.is_none()
+            && turn_context
+                .extension_data
+                .get::<codex_protocol::protocol::ContextPause>()
+                .is_none()
             && !self.work_budget().is_exhausted();
         let finishing = CancellationToken::new();
         let finish_recording = finishing.clone().drop_guard();

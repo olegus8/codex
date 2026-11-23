@@ -161,8 +161,8 @@ impl RegularTask {
                 ))
                 .instrument(run_turn_span.clone())
                 .await?;
-                // Preserve pending input for the next turn after an error, exhausted budget,
-                // or interrupt instead of reopening this turn.
+                // Preserve pending input for the next turn after an error, context pause,
+                // exhausted budget or interrupt instead of reopening this turn.
                 if ctx.terminal_error.lock().await.is_some()
                     || ctx
                         .extension_data
