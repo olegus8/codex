@@ -1,0 +1,5 @@
+---
+source: tui/src/chatwidget/tests/context_policy_tests.rs
+expression: lines_to_single_string(&history)
+---
+■ Context exhausted. History is preserved. Start a new session to continue.

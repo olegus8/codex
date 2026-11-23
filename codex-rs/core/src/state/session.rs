@@ -20,6 +20,7 @@ use crate::agent::host::ServiceTierAcceptance;
 use crate::context_manager::ContextManager;
 use crate::context_manager::HistoryReplacement;
 use crate::session::PreviousTurnSettings;
+use crate::session::context_pause::ContextPauseState;
 use crate::session::session::SessionConfiguration;
 use crate::session::startup_prewarm::SessionStartupPrewarmHandle;
 use crate::session::time_reminder::CurrentTimeReminderState;
@@ -86,6 +87,7 @@ pub(crate) struct SessionState {
     pub(crate) history: ContextManager,
     /// Newly recorded files awaiting best-effort lookup after the input batch is durable.
     pub(crate) pending_audio_duration_ids: BTreeSet<String>,
+    pub(crate) context_pause: ContextPauseState,
     /// Cancels work bound to discarded history or a superseded Guardian evidence policy.
     pub(crate) history_reset: CancellationToken,
     pub(crate) latest_rate_limits: Option<RateLimitSnapshot>,
@@ -151,6 +153,7 @@ impl SessionState {
             base_instructions_provenance: None,
             history,
             pending_audio_duration_ids: BTreeSet::new(),
+            context_pause: ContextPauseState::default(),
             history_reset: CancellationToken::new(),
             latest_rate_limits: None,
             latest_token_usage_record: None,
@@ -416,6 +419,10 @@ impl SessionState {
 
     pub(crate) fn get_total_token_usage(&self) -> i64 {
         self.history.get_total_token_usage()
+    }
+
+    pub(crate) fn get_reported_token_usage(&self) -> i64 {
+        self.history.get_reported_token_usage()
     }
 
     pub(crate) fn record_mcp_dependency_prompted<I>(&mut self, names: I)

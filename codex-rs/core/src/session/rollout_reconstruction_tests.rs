@@ -309,6 +309,7 @@ fn completed_user_turn_rollout(
     rollout_items.extend(items);
     rollout_items.push(RolloutItem::EventMsg(EventMsg::TurnComplete(
         codex_protocol::protocol::TurnCompleteEvent {
+            context_pause: None,
             root_turn_id: None,
             turn_id,
             last_agent_message: None,
@@ -559,6 +560,7 @@ async fn record_initial_history_resumed_hydrates_previous_turn_settings_from_lif
         RolloutItem::TurnContext(previous_context_item),
         RolloutItem::EventMsg(EventMsg::TurnComplete(
             codex_protocol::protocol::TurnCompleteEvent {
+                context_pause: None,
                 root_turn_id: None,
                 turn_id,
                 last_agent_message: None,
@@ -651,6 +653,7 @@ async fn reconstruct_history_rollback_keeps_history_and_metadata_in_sync_for_com
         RolloutItem::ResponseItem(turn_one_assistant.clone().into()),
         RolloutItem::EventMsg(EventMsg::TurnComplete(
             codex_protocol::protocol::TurnCompleteEvent {
+                context_pause: None,
                 root_turn_id: None,
                 turn_id: first_turn_id,
                 started_at: None,
@@ -695,6 +698,7 @@ async fn reconstruct_history_rollback_keeps_history_and_metadata_in_sync_for_com
         RolloutItem::ResponseItem(turn_two_assistant.into()),
         RolloutItem::EventMsg(EventMsg::TurnComplete(
             codex_protocol::protocol::TurnCompleteEvent {
+                context_pause: None,
                 root_turn_id: None,
                 turn_id: rolled_back_turn_id,
                 started_at: None,
@@ -783,6 +787,7 @@ async fn reconstruct_history_rollback_keeps_history_and_metadata_in_sync_for_inc
         RolloutItem::ResponseItem(turn_one_assistant.clone().into()),
         RolloutItem::EventMsg(EventMsg::TurnComplete(
             codex_protocol::protocol::TurnCompleteEvent {
+                context_pause: None,
                 root_turn_id: None,
                 turn_id: first_turn_id,
                 started_at: None,
@@ -889,6 +894,7 @@ async fn reconstruct_history_rollback_skips_non_user_turns_for_history_and_metad
         RolloutItem::ResponseItem(turn_one_assistant.clone().into()),
         RolloutItem::EventMsg(EventMsg::TurnComplete(
             codex_protocol::protocol::TurnCompleteEvent {
+                context_pause: None,
                 root_turn_id: None,
                 turn_id: first_turn_id,
                 started_at: None,
@@ -924,6 +930,7 @@ async fn reconstruct_history_rollback_skips_non_user_turns_for_history_and_metad
         RolloutItem::ResponseItem(turn_two_assistant.into()),
         RolloutItem::EventMsg(EventMsg::TurnComplete(
             codex_protocol::protocol::TurnCompleteEvent {
+                context_pause: None,
                 root_turn_id: None,
                 turn_id: second_turn_id,
                 started_at: None,
@@ -953,6 +960,7 @@ async fn reconstruct_history_rollback_skips_non_user_turns_for_history_and_metad
         }),
         RolloutItem::EventMsg(EventMsg::TurnComplete(
             codex_protocol::protocol::TurnCompleteEvent {
+                context_pause: None,
                 root_turn_id: None,
                 turn_id: standalone_turn_id,
                 started_at: None,
@@ -1036,6 +1044,7 @@ async fn reconstruct_history_rollback_counts_inter_agent_assistant_turns() {
         RolloutItem::ResponseItem(assistant_message("turn 1 assistant").into()),
         RolloutItem::EventMsg(EventMsg::TurnComplete(
             codex_protocol::protocol::TurnCompleteEvent {
+                context_pause: None,
                 root_turn_id: None,
                 turn_id: first_turn_id,
                 started_at: None,
@@ -1062,6 +1071,7 @@ async fn reconstruct_history_rollback_counts_inter_agent_assistant_turns() {
         RolloutItem::ResponseItem(assistant_reply.into()),
         RolloutItem::EventMsg(EventMsg::TurnComplete(
             codex_protocol::protocol::TurnCompleteEvent {
+                context_pause: None,
                 root_turn_id: None,
                 turn_id: assistant_turn_id,
                 started_at: None,
@@ -1140,6 +1150,7 @@ async fn reconstruct_history_rollback_clears_history_and_metadata_when_exceeding
         RolloutItem::ResponseItem(assistant_message("only assistant").into()),
         RolloutItem::EventMsg(EventMsg::TurnComplete(
             codex_protocol::protocol::TurnCompleteEvent {
+                context_pause: None,
                 root_turn_id: None,
                 turn_id: only_turn_id,
                 started_at: None,
@@ -1199,6 +1210,7 @@ async fn record_initial_history_resumed_rollback_skips_only_user_turns() {
         RolloutItem::TurnContext(previous_context_item),
         RolloutItem::EventMsg(EventMsg::TurnComplete(
             codex_protocol::protocol::TurnCompleteEvent {
+                context_pause: None,
                 root_turn_id: None,
                 turn_id: user_turn_id,
                 started_at: None,
@@ -1223,6 +1235,7 @@ async fn record_initial_history_resumed_rollback_skips_only_user_turns() {
         )),
         RolloutItem::EventMsg(EventMsg::TurnComplete(
             codex_protocol::protocol::TurnCompleteEvent {
+                context_pause: None,
                 root_turn_id: None,
                 turn_id: standalone_turn_id,
                 started_at: None,
@@ -1286,6 +1299,7 @@ async fn record_initial_history_resumed_rollback_drops_incomplete_user_turn_comp
         RolloutItem::TurnContext(previous_context_item.clone()),
         RolloutItem::EventMsg(EventMsg::TurnComplete(
             codex_protocol::protocol::TurnCompleteEvent {
+                context_pause: None,
                 root_turn_id: None,
                 turn_id: previous_turn_id,
                 started_at: None,
@@ -1644,6 +1658,7 @@ async fn bounded_replay_matches_full_replay_after_empty_turn_compactions(
                     resume_metadata: current.then(|| codex_history::CompactionResumeMetadata {
                         next_item_ordinal: None,
                         rejected_audio_file_ids: Default::default(),
+                        context_pause: None,
                         dynamic_tools: None,
                         observation_clock_floor_ms: None,
                         multi_agent_version: None,
@@ -2140,6 +2155,7 @@ async fn reconstruct_history_legacy_compaction_without_replacement_history_clear
         RolloutItem::TurnContext(current_context_item),
         RolloutItem::EventMsg(EventMsg::TurnComplete(
             codex_protocol::protocol::TurnCompleteEvent {
+                context_pause: None,
                 root_turn_id: None,
                 turn_id: current_turn_id,
                 started_at: None,
@@ -2228,6 +2244,7 @@ async fn record_initial_history_resumed_turn_context_after_compaction_reestablis
         RolloutItem::TurnContext(previous_context_item),
         RolloutItem::EventMsg(EventMsg::TurnComplete(
             codex_protocol::protocol::TurnCompleteEvent {
+                context_pause: None,
                 root_turn_id: None,
                 turn_id: previous_turn_id,
                 started_at: None,
@@ -2341,6 +2358,7 @@ async fn record_initial_history_resumed_aborted_turn_without_id_clears_active_tu
         RolloutItem::TurnContext(previous_context_item),
         RolloutItem::EventMsg(EventMsg::TurnComplete(
             codex_protocol::protocol::TurnCompleteEvent {
+                context_pause: None,
                 root_turn_id: None,
                 turn_id: previous_turn_id,
                 started_at: None,
@@ -2478,6 +2496,7 @@ async fn record_initial_history_resumed_unmatched_abort_preserves_active_turn_fo
         RolloutItem::TurnContext(previous_context_item),
         RolloutItem::EventMsg(EventMsg::TurnComplete(
             codex_protocol::protocol::TurnCompleteEvent {
+                context_pause: None,
                 root_turn_id: None,
                 turn_id: previous_turn_id,
                 started_at: None,
@@ -2523,6 +2542,7 @@ async fn record_initial_history_resumed_unmatched_abort_preserves_active_turn_fo
         RolloutItem::TurnContext(current_context_item.clone()),
         RolloutItem::EventMsg(EventMsg::TurnComplete(
             codex_protocol::protocol::TurnCompleteEvent {
+                context_pause: None,
                 root_turn_id: None,
                 turn_id: current_turn_id,
                 started_at: None,
@@ -2617,6 +2637,7 @@ async fn record_initial_history_resumed_trailing_incomplete_turn_compaction_clea
         RolloutItem::TurnContext(previous_context_item),
         RolloutItem::EventMsg(EventMsg::TurnComplete(
             codex_protocol::protocol::TurnCompleteEvent {
+                context_pause: None,
                 root_turn_id: None,
                 turn_id: previous_turn_id,
                 started_at: None,
@@ -2802,6 +2823,7 @@ async fn record_initial_history_resumed_replaced_incomplete_compacted_turn_clear
         RolloutItem::TurnContext(previous_context_item),
         RolloutItem::EventMsg(EventMsg::TurnComplete(
             codex_protocol::protocol::TurnCompleteEvent {
+                context_pause: None,
                 root_turn_id: None,
                 turn_id: previous_turn_id,
                 started_at: None,

@@ -164,6 +164,10 @@ impl RegularTask {
                 // Preserve pending input for the next turn after an error, exhausted budget,
                 // or interrupt instead of reopening this turn.
                 if ctx.terminal_error.lock().await.is_some()
+                    || ctx
+                        .extension_data
+                        .get::<codex_protocol::protocol::ContextPause>()
+                        .is_some()
                     || sess.work_budget().is_exhausted()
                     || SamplingInterrupt::is_requested_for(&sess, &ctx).await
                     || !sess.input_queue.has_pending_input(&sess.active_turn).await

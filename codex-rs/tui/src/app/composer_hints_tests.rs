@@ -46,6 +46,7 @@ async fn usage_notice_preserves_composer_geometry_on_recovery() -> Result<()> {
                 ServerNotification::TurnStarted(TurnStartedNotification {
                     thread_id: ThreadId::new().to_string(),
                     turn: Turn {
+                        context_pause: None,
                         id: "turn".into(),
                         root_turn_id: None,
                         items_view: TurnItemsView::Full,

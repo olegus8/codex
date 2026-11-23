@@ -7,6 +7,7 @@ pub use heartbeat::UserInputOrigin;
 
 mod compaction_resume_metadata;
 pub use codex_protocol::turn_input::TurnAttribution;
+pub use compaction_resume_metadata::CompactionContextPause;
 pub use compaction_resume_metadata::CompactionResumeMetadata;
 pub use compaction_resume_metadata::DynamicToolsSnapshot;
 pub use compaction_resume_metadata::PreviousTurnSettings;

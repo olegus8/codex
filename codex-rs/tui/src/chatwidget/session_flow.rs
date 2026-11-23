@@ -103,6 +103,7 @@ impl ChatWidget {
         self.read_only_history = session.read_only_history;
         self.thread_settings_confirmed = session.thread_settings_confirmed;
         self.sync_context_window_visibility();
+        self.input_queue.context_input_required = session.waiting_context_pause.is_some();
         self.daybreak_enabled = self.config.features.enabled(Feature::CliDaybreak)
             && session.daybreak_enabled
             && !matches!(display, SessionConfiguredDisplay::SideConversation);

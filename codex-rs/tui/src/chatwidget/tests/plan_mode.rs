@@ -19,6 +19,7 @@ fn plan_test_session(thread_id: ThreadId) -> crate::session_state::ThreadSession
         read_only_history: false,
         thread_settings_confirmed: true,
         primary_environment_cwd: None,
+        waiting_context_pause: None,
         daybreak_enabled: false,
         windows_sandbox_host: crate::app::WindowsSandboxHost::Local,
         thread_id,
@@ -797,6 +798,7 @@ async fn plan_implementation_popup_skips_replayed_turn_complete() {
 
     chat.replay_thread_turns(
         vec![AppServerTurn {
+            context_pause: None,
             id: "turn-1".to_string(),
             root_turn_id: None,
             items_view: codex_app_server_protocol::TurnItemsView::Full,
@@ -841,6 +843,7 @@ async fn plan_implementation_popup_shows_once_when_replay_precedes_live_turn_com
 
     chat.replay_thread_turns(
         vec![AppServerTurn {
+            context_pause: None,
             id: "turn-1".to_string(),
             root_turn_id: None,
             items_view: codex_app_server_protocol::TurnItemsView::Full,
@@ -1154,6 +1157,7 @@ async fn submit_user_message_queues_while_compaction_turn_is_running() {
         ServerNotification::TurnStarted(TurnStartedNotification {
             thread_id: thread_id.to_string(),
             turn: AppServerTurn {
+                context_pause: None,
                 id: "turn-1".to_string(),
                 root_turn_id: None,
                 items_view: codex_app_server_protocol::TurnItemsView::Full,
@@ -1200,6 +1204,7 @@ async fn submit_user_message_queues_while_compaction_turn_is_running() {
         ServerNotification::TurnCompleted(TurnCompletedNotification {
             thread_id: thread_id.to_string(),
             turn: AppServerTurn {
+                context_pause: None,
                 id: "turn-1".to_string(),
                 root_turn_id: None,
                 items_view: codex_app_server_protocol::TurnItemsView::Full,
@@ -1235,6 +1240,7 @@ async fn submit_user_message_emits_structured_plugin_mentions_from_bindings() {
         read_only_history: false,
         thread_settings_confirmed: true,
         primary_environment_cwd: None,
+        waiting_context_pause: None,
         daybreak_enabled: false,
         windows_sandbox_host: crate::app::WindowsSandboxHost::Local,
         thread_id,

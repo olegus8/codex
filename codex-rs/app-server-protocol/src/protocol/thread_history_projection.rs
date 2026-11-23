@@ -29,6 +29,7 @@ pub fn project_rollout_line(line: &RolloutLine) -> ThreadHistoryChangeSet {
                 started_at: event.started_at,
                 completed_at: None,
                 duration_ms: None,
+                context_pause: None,
             }],
             ..Default::default()
         },
@@ -45,6 +46,7 @@ pub fn project_rollout_line(line: &RolloutLine) -> ThreadHistoryChangeSet {
                 started_at: event.started_at,
                 completed_at: event.completed_at,
                 duration_ms: event.duration_ms,
+                context_pause: event.context_pause.clone().map(Into::into),
             }],
             ..Default::default()
         },
@@ -61,6 +63,7 @@ pub fn project_rollout_line(line: &RolloutLine) -> ThreadHistoryChangeSet {
                     started_at: event.started_at,
                     completed_at: event.completed_at,
                     duration_ms: event.duration_ms,
+                    context_pause: None,
                 }],
                 ..Default::default()
             }

@@ -698,6 +698,7 @@ fn compacted_resume_metadata_presence_round_trips_empty_values() -> Result<()> {
     let resume_metadata = CompactionResumeMetadata {
         next_item_ordinal: None,
         rejected_audio_file_ids: Default::default(),
+        context_pause: None,
         dynamic_tools: None,
         observation_clock_floor_ms: None,
         multi_agent_version: None,
@@ -813,6 +814,7 @@ fn compacted_metadata_remains_compatible_with_legacy_response_item_readers() -> 
         resume_metadata: Some(CompactionResumeMetadata {
             next_item_ordinal: None,
             rejected_audio_file_ids: Default::default(),
+            context_pause: None,
             dynamic_tools: None,
             observation_clock_floor_ms: None,
             multi_agent_version: Some(MultiAgentVersion::V2),

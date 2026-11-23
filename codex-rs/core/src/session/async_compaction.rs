@@ -5,6 +5,7 @@
 use codex_login::AuthOwner;
 use std::sync::Arc;
 
+use crate::compact::automatic_compaction_configured;
 use crate::compact_remote_v2::BackgroundCompactionCandidate;
 use crate::compact_remote_v2::capture_background_input;
 use crate::compact_remote_v2::run_background_compaction;
@@ -41,7 +42,8 @@ pub(crate) struct AsyncCompactionState {
 
 pub(super) fn enabled(turn_context: &TurnContext) -> bool {
     let features = &turn_context.config.features;
-    features.enabled(Feature::AsyncCompaction)
+    automatic_compaction_configured(turn_context)
+        && features.enabled(Feature::AsyncCompaction)
         && !(features.enabled(Feature::AsyncCompactionRootOnly)
             && turn_context.session_source.is_non_root_agent())
         && !features.enabled(Feature::TokenBudget)
