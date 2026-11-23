@@ -1314,7 +1314,7 @@ async fn cold_resume_pages_inherited_history_when_active_ancestor_is_short() -> 
                 content: Vec::new(),
             }),
         ),
-        paginated_turn_completed("turn-1"),
+        paginated_turn_completed("turn-1", /*context_pause*/ None),
     ] {
         codex_rollout::append_rollout_item_to_path(&active, &item).await?;
     }
