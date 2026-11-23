@@ -729,11 +729,12 @@ async fn guardian_compacts_when_parent_disables_automatic_compaction() {
         .session
         .update_token_usage_info(
             &reviewer_turn,
-            Some(&TokenUsage {
+            TokenUsage {
                 input_tokens: 85_000,
                 total_tokens: 85_000,
                 ..Default::default()
-            }),
+            }
+            .into(),
             /*includes_reasoning*/ false,
         )
         .await
@@ -742,7 +743,10 @@ async fn guardian_compacts_when_parent_disables_automatic_compaction() {
     tokio::select! {
         submission = rx_sub.recv() => {
             let submission = submission.expect("guardian submission");
-            assert!(matches!(submission.op, Op::Compact), "Guardian must compact before review");
+            assert!(
+                matches!(submission.op.as_protocol(), Some(Op::Compact)),
+                "Guardian must compact before review"
+            );
         }
         _ = run_review_on_session(
             &reviewer,

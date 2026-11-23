@@ -35,7 +35,10 @@ fn compaction(pause: Option<CompactionContextPause>) -> RolloutItem {
         compaction_response_id: None,
         latest_token_usage_record: None,
         resume_metadata: Some(CompactionResumeMetadata {
+            next_item_ordinal: None,
+            rejected_audio_file_ids: Default::default(),
             dynamic_tools: None,
+            observation_clock_floor_ms: None,
             multi_agent_version: None,
             turn_attribution: None,
             last_started_turn_id: None,
@@ -82,6 +85,7 @@ fn user_message(thread_id: ThreadId) -> RolloutItem {
         thread_id,
         turn_id: "handoff".to_string(),
         item: TurnItem::UserMessage(UserMessageItem::new(&[])),
+        content_token_count: None,
         started_at_ms: None,
         completed_at_ms: 0,
     }))
