@@ -752,7 +752,7 @@ async fn thread_search_occurrences_reads_paginated_projection() -> Result<()> {
                         questions: None,
                     }),
                 ),
-                paginated_turn_completed("turn-1"),
+                paginated_turn_completed("turn-1", /*context_pause*/ None),
             ],
         })
         .await?;
@@ -1314,7 +1314,7 @@ async fn cold_resume_pages_inherited_history_when_active_ancestor_is_short() -> 
                 content: Vec::new(),
             }),
         ),
-        paginated_turn_completed("turn-1"),
+        paginated_turn_completed("turn-1", /*context_pause*/ None),
     ] {
         codex_rollout::append_rollout_item_to_path(&active, &item).await?;
     }
@@ -2199,6 +2199,13 @@ async fn paginated_history_lists_and_legacy_reads_use_projected_turns_and_items(
     let codex_home = TempDir::new()?;
     MockResponsesConfig::new(&server.uri()).write(codex_home.path())?;
     let thread_id = codex_protocol::ThreadId::default();
+    let pause = codex_protocol::protocol::ContextPause {
+        thread_id,
+        used_tokens: 140_000,
+        context_window: 190_000,
+        threshold_percent: 70,
+        resumed_by_user: false,
+    };
     let store = create_paginated_thread(codex_home.path(), thread_id).await?;
     store
         .append_items(AppendThreadItemsParams {
@@ -2247,7 +2254,7 @@ async fn paginated_history_lists_and_legacy_reads_use_projected_turns_and_items(
                         content: Vec::new(),
                     }),
                 ),
-                paginated_turn_completed("turn-1"),
+                paginated_turn_completed("turn-1", Some(pause.clone())),
                 paginated_turn_started("turn-2"),
                 paginated_completed_item(
                     thread_id,
@@ -2270,6 +2277,7 @@ async fn paginated_history_lists_and_legacy_reads_use_projected_turns_and_items(
         .await?;
 
     let expected_turn_1_full = Turn {
+        context_pause: Some(pause.clone().into()),
         id: "turn-1".to_string(),
         root_turn_id: None,
         items: vec![
@@ -2308,6 +2316,7 @@ async fn paginated_history_lists_and_legacy_reads_use_projected_turns_and_items(
         duration_ms: Some(10_000),
     };
     let expected_turn_2_full = Turn {
+        context_pause: None,
         id: "turn-2".to_string(),
         root_turn_id: None,
         items: vec![ThreadItemPayload::UserMessage {
@@ -2480,6 +2489,7 @@ async fn paginated_history_lists_and_legacy_reads_use_projected_turns_and_items(
     assert_eq!(
         first_page.data,
         vec![Turn {
+            context_pause: Some(pause.into()),
             id: "turn-1".to_string(),
             root_turn_id: None,
             items: vec![
@@ -2544,6 +2554,7 @@ async fn paginated_history_lists_and_legacy_reads_use_projected_turns_and_items(
     assert_eq!(
         second_page.data,
         vec![Turn {
+            context_pause: None,
             id: "turn-2".to_string(),
             root_turn_id: None,
             items: Vec::new(),
@@ -3127,8 +3138,12 @@ fn paginated_turn_started(turn_id: &str) -> RolloutItem {
     }))
 }
 
-fn paginated_turn_completed(turn_id: &str) -> RolloutItem {
+fn paginated_turn_completed(
+    turn_id: &str,
+    context_pause: Option<codex_protocol::protocol::ContextPause>,
+) -> RolloutItem {
     RolloutItem::EventMsg(EventMsg::TurnComplete(TurnCompleteEvent {
+        context_pause,
         root_turn_id: None,
         turn_id: turn_id.to_string(),
         last_agent_message: None,

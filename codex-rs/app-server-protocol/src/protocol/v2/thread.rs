@@ -1,6 +1,8 @@
 use super::ActivePermissionProfile;
 use super::ApprovalsReviewer;
 use super::AskForApproval;
+use super::ContextPause;
+use super::ContextWindowUsage;
 use super::SandboxMode;
 use super::SandboxPolicy;
 use super::Thread;
@@ -449,6 +451,10 @@ pub struct ThreadResumeParams {
 #[ts(export_to = "v2/")]
 pub struct ThreadResumeResponse {
     pub thread: Thread,
+    /// Context pause currently waiting for user input.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub waiting_context_pause: Option<super::WaitingContextPause>,
     pub model: String,
     pub model_provider: String,
     pub service_tier: Option<String>,
@@ -666,6 +672,10 @@ pub struct ThreadForkParams {
 #[ts(export_to = "v2/")]
 pub struct ThreadForkResponse {
     pub thread: Thread,
+    /// Context pause currently waiting for user input in the fork.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub waiting_context_pause: Option<super::WaitingContextPause>,
     pub model: String,
     pub model_provider: String,
     pub service_tier: Option<String>,
@@ -2129,6 +2139,9 @@ pub enum ThreadTimelineEntry {
         completed_at: Option<i64>,
         #[ts(rename = "durationMs", type = "number | null")]
         duration_ms: Option<i64>,
+        #[serde(default)]
+        #[ts(rename = "contextPause")]
+        context_pause: Option<ContextPause>,
     },
 }
 
@@ -2191,6 +2204,9 @@ pub struct ThreadTokenUsage {
     // TODO(aibrahim): make this not optional
     #[ts(type = "number | null")]
     pub model_context_window: Option<i64>,
+    /// Runtime usage against the usable limit when automatic compaction is disabled.
+    #[serde(default)]
+    pub context_window_usage: Option<ContextWindowUsage>,
 }
 
 impl From<CoreTokenUsageInfo> for ThreadTokenUsage {
@@ -2199,6 +2215,7 @@ impl From<CoreTokenUsageInfo> for ThreadTokenUsage {
             total: value.total_token_usage.into(),
             last: value.last_token_usage.into(),
             model_context_window: value.model_context_window,
+            context_window_usage: value.context_window_usage.map(Into::into),
         }
     }
 }

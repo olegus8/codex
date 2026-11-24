@@ -4,6 +4,7 @@ use crate::state::TaskKind;
 use crate::thread_manager::AgentTreeShutdownFailure;
 use codex_protocol::error::CodexErr;
 use codex_protocol::error::Result as CodexResult;
+use codex_protocol::protocol::ContextPause;
 use codex_protocol::protocol::Event;
 use codex_protocol::protocol::EventMsg;
 use codex_protocol::protocol::MultiAgentVersion;
@@ -21,7 +22,13 @@ pub(super) async fn suspend_turn_and_shutdown(
         let Some(task) = active.as_ref().and_then(|turn| turn.task.as_ref()) else {
             return Ok(SuspendTurnOutcome::NotActive);
         };
-        if task.kind != TaskKind::Regular {
+        if task.kind != TaskKind::Regular
+            || task
+                .turn_context
+                .extension_data
+                .get::<ContextPause>()
+                .is_some()
+        {
             return Ok(SuspendTurnOutcome::UnsupportedTask);
         }
     }
@@ -44,7 +51,13 @@ pub(super) async fn suspend_turn_and_shutdown(
         let Some(task) = active_turn.task.as_ref() else {
             return Ok(SuspendTurnOutcome::NotActive);
         };
-        if task.kind != TaskKind::Regular {
+        if task.kind != TaskKind::Regular
+            || task
+                .turn_context
+                .extension_data
+                .get::<ContextPause>()
+                .is_some()
+        {
             return Ok(SuspendTurnOutcome::UnsupportedTask);
         }
         active.take().ok_or_else(|| {

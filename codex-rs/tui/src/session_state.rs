@@ -7,6 +7,7 @@ use std::path::PathBuf;
 
 use codex_app_server_protocol::AskForApproval;
 use codex_app_server_protocol::ThreadEnvironment;
+use codex_app_server_protocol::WaitingContextPause;
 use codex_protocol::ThreadId;
 use codex_protocol::config_types::CollaborationMode;
 use codex_protocol::models::ActivePermissionProfile;
@@ -33,6 +34,7 @@ pub(crate) struct ThreadSessionState {
     pub(crate) read_only_history: bool,
     /// Inferred child sessions can carry settings copied from the primary thread.
     pub(crate) thread_settings_confirmed: bool,
+    pub(crate) waiting_context_pause: Option<WaitingContextPause>,
     pub(crate) daybreak_enabled: bool,
     pub(crate) windows_sandbox_host: crate::app::WindowsSandboxHost,
     pub(crate) thread_id: ThreadId,

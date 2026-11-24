@@ -1444,6 +1444,90 @@ async fn replay_thread_snapshot_renders_only_retained_agent_message_deltas() {
 }
 
 #[tokio::test]
+async fn context_policy_resume_waiting_holds_queue_and_shows_one_notice() -> Result<()> {
+    check_context_policy_replay(/*waiting*/ true, /*fork*/ false).await
+}
+
+#[tokio::test]
+async fn context_policy_resume_answered_does_not_hold_or_show_notice() -> Result<()> {
+    check_context_policy_replay(/*waiting*/ false, /*fork*/ false).await
+}
+
+#[tokio::test]
+async fn context_policy_fork_does_not_hold_or_show_notice() -> Result<()> {
+    check_context_policy_replay(/*waiting*/ false, /*fork*/ true).await
+}
+
+async fn check_context_policy_replay(waiting: bool, fork: bool) -> Result<()> {
+    use codex_app_server_protocol::ContextPause;
+    use codex_app_server_protocol::TurnItemsView;
+    use codex_app_server_protocol::WaitingContextPause;
+
+    let (mut app, mut events, mut ops) = make_test_app_with_channels().await;
+    let thread_id = ThreadId::new();
+    let mut session = test_thread_session(thread_id, test_path_buf("/tmp/project"));
+    session.forked_from_id = fork.then(ThreadId::new);
+    let pause = ContextPause {
+        used_tokens: 133_000,
+        context_window: 190_000,
+        threshold_percent: 70,
+    };
+    let mut historical_pause = test_turn("pause", TurnStatus::Completed, Vec::new());
+    historical_pause.context_pause = Some(pause.clone());
+    if waiting {
+        historical_pause.items_view = TurnItemsView::NotLoaded;
+    }
+    let mut turns = vec![historical_pause];
+    if !waiting && !fork {
+        let mut answer = test_turn("answer", TurnStatus::Completed, Vec::new());
+        answer.items_view = TurnItemsView::NotLoaded;
+        turns.push(answer);
+    }
+
+    app.chat_widget.handle_thread_session(session.clone());
+    app.chat_widget.handle_server_notification(
+        turn_started_notification(thread_id, "pending"),
+        /*replay_kind*/ None,
+    );
+    app.chat_widget
+        .apply_external_edit("Queued work".to_string());
+    app.chat_widget
+        .handle_key_event(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+    app.chat_widget
+        .set_queue_autosend_suppressed(/*suppressed*/ true);
+    app.chat_widget.handle_server_notification(
+        turn_completed_notification(thread_id, "pending", TurnStatus::Completed),
+        /*replay_kind*/ None,
+    );
+    app.chat_widget
+        .set_queue_autosend_suppressed(/*suppressed*/ false);
+    assert_eq!(app.chat_widget.queued_user_message_texts(), ["Queued work"]);
+    session.waiting_context_pause = waiting.then_some(WaitingContextPause {
+        details: Some(pause),
+    });
+    app.enqueue_primary_thread_session(session, turns).await?;
+
+    let mut notices = 0;
+    while let Ok(event) = events.try_recv() {
+        if let AppEvent::InsertHistoryCell(cell) = event {
+            let rendered = lines_to_single_string(&cell.display_lines(/*width*/ 100));
+            notices += rendered.matches("Send a message to continue").count();
+        }
+    }
+    assert_eq!(notices, usize::from(waiting));
+    let mut submitted = false;
+    while let Ok(op) = ops.try_recv() {
+        submitted |= matches!(op, Op::UserTurn { .. });
+    }
+    assert_eq!(submitted, !waiting);
+    assert_eq!(
+        app.chat_widget.queued_user_message_texts(),
+        if waiting { vec!["Queued work"] } else { vec![] },
+    );
+    Ok(())
+}
+
+#[tokio::test]
 async fn replay_thread_snapshot_restores_draft_and_queued_input() {
     let mut app = make_test_app().await;
     let thread_id = ThreadId::new();
@@ -7578,6 +7662,7 @@ async fn inactive_thread_started_notification_initializes_replay_session() -> Re
                 developer_instructions: None,
             },
         })),
+        waiting_context_pause: None,
         daybreak_enabled: false,
         windows_sandbox_host: WindowsSandboxHost::Local,
         approval_policy: AskForApproval::OnRequest,
@@ -8290,6 +8375,7 @@ async fn side_thread_snapshot_hides_forked_parent_transcript() {
     let side_thread_id = ThreadId::new();
     let mut store = ThreadEventStore::new(/*capacity*/ 4);
     let session = ThreadSessionState {
+        waiting_context_pause: None,
         daybreak_enabled: false,
         windows_sandbox_host: crate::app::WindowsSandboxHost::Local,
         forked_from_id: Some(parent_thread_id),
@@ -8359,6 +8445,7 @@ async fn side_thread_snapshot_skips_session_header_preamble() {
     let snapshot = ThreadEventSnapshot {
         delegated_turns: Vec::new(),
         session: Some(ThreadSessionState {
+            waiting_context_pause: None,
             daybreak_enabled: false,
             windows_sandbox_host: crate::app::WindowsSandboxHost::Local,
             forked_from_id: Some(parent_thread_id),
@@ -8961,6 +9048,7 @@ async fn render_clear_ui_header_after_long_transcript_for_snapshot() -> String {
             read_only_history: false,
             thread_settings_confirmed: true,
             primary_environment_cwd: None,
+            waiting_context_pause: None,
             daybreak_enabled: false,
             windows_sandbox_host: crate::app::WindowsSandboxHost::Local,
             thread_id: ThreadId::new(),
@@ -9705,6 +9793,7 @@ pub(super) fn test_thread_session(thread_id: ThreadId, cwd: PathBuf) -> ThreadSe
         read_only_history: false,
         thread_settings_confirmed: true,
         primary_environment_cwd: None,
+        waiting_context_pause: None,
         daybreak_enabled: false,
         windows_sandbox_host: crate::app::WindowsSandboxHost::Local,
         thread_id,
@@ -10397,6 +10486,7 @@ async fn resizing_empty_transcript_schedules_settled_size_recheck() {
 
 pub(super) fn test_turn(turn_id: &str, status: TurnStatus, items: Vec<ThreadItemPayload>) -> Turn {
     Turn {
+        context_pause: None,
         id: turn_id.to_string(),
         root_turn_id: None,
         items_view: codex_app_server_protocol::TurnItemsView::Full,
@@ -10449,6 +10539,7 @@ fn token_usage_notification(
         thread_id: thread_id.to_string(),
         turn_id: turn_id.to_string(),
         token_usage: ThreadTokenUsage {
+            context_window_usage: None,
             total: TokenUsageBreakdown {
                 total_tokens: 10,
                 input_tokens: 4,
@@ -10968,6 +11059,7 @@ async fn backtrack_selection_preserves_selected_prompt_and_requests_branch() {
             read_only_history: false,
             thread_settings_confirmed: true,
             primary_environment_cwd: None,
+            waiting_context_pause: None,
             daybreak_enabled: false,
             windows_sandbox_host: crate::app::WindowsSandboxHost::Local,
             thread_id: ThreadId::new(),
@@ -11044,6 +11136,7 @@ async fn backtrack_selection_preserves_selected_prompt_and_requests_branch() {
             read_only_history: false,
             thread_settings_confirmed: true,
             primary_environment_cwd: None,
+            waiting_context_pause: None,
             daybreak_enabled: false,
             windows_sandbox_host: crate::app::WindowsSandboxHost::Local,
             thread_id: base_id,
@@ -11812,6 +11905,7 @@ async fn prompt_edit_reverts_earlier_and_first_visible_prompts_in_place_scenario
                 completed_at_ms: 0,
             })),
             RolloutItem::EventMsg(EventMsg::TurnComplete(TurnCompleteEvent {
+                context_pause: None,
                 root_turn_id: None,
                 turn_id: turn_id.to_string(),
                 last_agent_message: None,
@@ -12199,6 +12293,7 @@ async fn replay_thread_snapshot_replays_turn_history_in_order() {
             )),
             turns: vec![
                 Turn {
+                    context_pause: None,
                     id: "turn-1".to_string(),
                     root_turn_id: None,
                     items_view: codex_app_server_protocol::TurnItemsView::Full,
@@ -12217,6 +12312,7 @@ async fn replay_thread_snapshot_replays_turn_history_in_order() {
                     duration_ms: None,
                 },
                 Turn {
+                    context_pause: None,
                     id: "turn-2".to_string(),
                     root_turn_id: None,
                     items_view: codex_app_server_protocol::TurnItemsView::Full,
@@ -12443,6 +12539,7 @@ async fn new_session_requests_shutdown_for_previous_conversation() {
             read_only_history: false,
             thread_settings_confirmed: true,
             primary_environment_cwd: None,
+            waiting_context_pause: None,
             daybreak_enabled: false,
             windows_sandbox_host: crate::app::WindowsSandboxHost::Local,
             thread_id,
@@ -13225,6 +13322,7 @@ async fn clear_only_ui_reset_preserves_chat_session_state() {
             read_only_history: false,
             thread_settings_confirmed: true,
             primary_environment_cwd: None,
+            waiting_context_pause: None,
             daybreak_enabled: false,
             windows_sandbox_host: crate::app::WindowsSandboxHost::Local,
             thread_id,

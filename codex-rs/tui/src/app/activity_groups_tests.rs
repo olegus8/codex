@@ -44,6 +44,7 @@ fn reasoning(id: &str) -> ThreadItemPayload {
 
 fn turn(items: Vec<ThreadItemPayload>) -> Turn {
     Turn {
+        context_pause: None,
         id: "turn".to_owned(),
         root_turn_id: None,
         items: items.into_iter().map(ThreadItem::untimed).collect(),

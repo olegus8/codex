@@ -3086,6 +3086,7 @@ async fn thread_session_state_from_thread_resume_response(
     )
     .await?;
     session.collaboration_mode = response.collaboration_mode.clone().map(Box::new);
+    session.waiting_context_pause = response.waiting_context_pause.clone();
     session.daybreak_enabled = response.thread.daybreak_enabled.unwrap_or(false);
     Ok(session)
 }
@@ -3122,6 +3123,7 @@ async fn thread_session_state_from_thread_fork_response(
         local_settings,
     )
     .await?;
+    session.waiting_context_pause = response.waiting_context_pause.clone();
     session.daybreak_enabled = response.thread.daybreak_enabled.unwrap_or(false);
     Ok(session)
 }
@@ -3189,6 +3191,7 @@ async fn thread_session_state_from_thread_response(
     Ok(ThreadSessionState {
         read_only_history: false,
         thread_settings_confirmed: true,
+        waiting_context_pause: None,
         daybreak_enabled: false,
         windows_sandbox_host: crate::windows_sandbox::host_from_environments(environments),
         primary_environment_cwd: crate::session_state::primary_environment_cwd(
@@ -5102,6 +5105,7 @@ mod tests {
         let forked_from_id = ThreadId::new();
         let read_only_profile = PermissionProfile::read_only();
         let response = ThreadResumeResponse {
+            waiting_context_pause: None,
             disabled_plugin_ids: Vec::new(),
             thread: codex_app_server_protocol::Thread {
                 originator: None,
@@ -5141,6 +5145,7 @@ mod tests {
                 git_info: None,
                 name: None,
                 turns: vec![Turn {
+                    context_pause: None,
                     id: "turn-1".to_string(),
                     root_turn_id: None,
                     items_view: codex_app_server_protocol::TurnItemsView::Full,

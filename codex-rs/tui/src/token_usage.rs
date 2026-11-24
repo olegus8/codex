@@ -70,6 +70,8 @@ impl TokenUsage {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct TokenUsageInfo {
+    #[serde(default)]
+    pub(crate) context_window_usage: Option<codex_app_server_protocol::ContextWindowUsage>,
     pub(crate) total_token_usage: TokenUsage,
     pub(crate) last_token_usage: TokenUsage,
     pub(crate) model_context_window: Option<i64>,

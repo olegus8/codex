@@ -317,6 +317,9 @@ impl ChatWidget {
     /// Set the model in the widget's config copy and stored collaboration mode.
     pub(crate) fn set_model(&mut self, model: &str) {
         if model != self.current_model() {
+            if !self.local_settings.model_switching_enabled {
+                return;
+            }
             self.queue_unavailable_daybreak_disable(model);
             if self.current_model() == crate::model_catalog::LUNA_RESERVE_MODEL {
                 self.clear_reserve_return();
@@ -766,6 +769,9 @@ impl ChatWidget {
         let previous_mode = self.active_mode_kind();
         let previous_model = self.current_model().to_string();
         let previous_effort = self.effective_reasoning_effort();
+        if !self.local_settings.model_switching_enabled {
+            mask.model = Some(previous_model.clone());
+        }
         if mask.mode == Some(ModeKind::Plan)
             && let Some(effort) = self.config.plan_mode_reasoning_effort.clone()
         {

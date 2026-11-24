@@ -962,6 +962,7 @@ fn request_permissions_from_params(
 
 fn token_usage_info_from_app_server(token_usage: ThreadTokenUsage) -> TokenUsageInfo {
     TokenUsageInfo {
+        context_window_usage: token_usage.context_window_usage,
         total_token_usage: token_usage.total.into(),
         last_token_usage: token_usage.last.into(),
         model_context_window: token_usage.model_context_window,

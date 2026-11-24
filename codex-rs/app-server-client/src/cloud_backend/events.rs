@@ -9,6 +9,7 @@ use color_eyre::eyre::bail;
 
 pub(super) fn turn(summary: cloud::TurnSummary) -> Result<protocol::Turn> {
     Ok(protocol::Turn {
+        context_pause: None,
         id: summary.id,
         root_turn_id: None,
         items: Vec::new(),

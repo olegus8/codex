@@ -1605,6 +1605,13 @@ async fn thread_fork_creates_reference_backed_paginated_thread() -> Result<()> {
         "2025-01-05T12-00-00",
         conversation_id.as_str(),
     );
+    let pause = codex_protocol::protocol::ContextPause {
+        thread_id: ThreadId::from_string(conversation_id.as_str())?,
+        used_tokens: 140_000,
+        context_window: 190_000,
+        threshold_percent: 70,
+        resumed_by_user: false,
+    };
     for item in [
         RolloutItem::EventMsg(EventMsg::TurnStarted(TurnStartedEvent {
             turn_attribution: None,
@@ -1616,6 +1623,7 @@ async fn thread_fork_creates_reference_backed_paginated_thread() -> Result<()> {
             collaboration_mode_kind: Default::default(),
         })),
         RolloutItem::EventMsg(EventMsg::TurnComplete(TurnCompleteEvent {
+            context_pause: Some(pause.clone()),
             root_turn_id: None,
             turn_id: "turn-1".to_string(),
             last_agent_message: None,
@@ -1643,10 +1651,13 @@ async fn thread_fork_creates_reference_backed_paginated_thread() -> Result<()> {
         .await?;
     let ThreadForkResponse {
         thread: forked_thread,
+        waiting_context_pause,
         ..
     } = timeout(DEFAULT_READ_TIMEOUT, mcp.read_response(fork_id)).await??;
     assert_eq!(forked_thread.forked_from_id, Some(conversation_id.clone()));
     assert_eq!(forked_thread.turns.len(), 1);
+    assert_eq!(forked_thread.turns[0].context_pause, Some(pause.into()));
+    assert_eq!(waiting_context_pause, None);
     let forked_thread_id = forked_thread.id.clone();
     let listed = list_threads(&mut mcp).await?;
     assert_eq!(
@@ -2107,6 +2118,7 @@ async fn thread_fork_freezes_active_paginated_turn_as_interrupted(
     append_rollout_item_to_path(
         source_path.as_path(),
         &RolloutItem::EventMsg(EventMsg::TurnComplete(TurnCompleteEvent {
+            context_pause: None,
             root_turn_id: None,
             turn_id: "active-turn".to_string(),
             last_agent_message: None,

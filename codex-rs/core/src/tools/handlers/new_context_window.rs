@@ -1,4 +1,5 @@
 use crate::compact::AutoCompactionDisabled;
+use crate::compact::automatic_compaction_configured;
 use crate::function_tool::FunctionCallError;
 use crate::tools::context::FunctionToolOutput;
 use crate::tools::context::ToolInvocation;
@@ -46,12 +47,13 @@ impl ToolExecutor<ToolInvocation> for NewContextWindowHandler {
                 ));
             }
 
-            if invocation
-                .session
-                .services
-                .thread_extension_data
-                .get::<AutoCompactionDisabled>()
-                .is_some()
+            if !automatic_compaction_configured(&invocation.step_context.turn)
+                || invocation
+                    .session
+                    .services
+                    .thread_extension_data
+                    .get::<AutoCompactionDisabled>()
+                    .is_some()
             {
                 return Err(FunctionCallError::RespondToModel(
                     "Context resets are disabled for this thread.".to_string(),

@@ -185,6 +185,7 @@ impl ChatWidget {
         let should_run_now = !self.thread_stream_disconnected
             && self.is_session_configured()
             && !self.is_user_turn_pending_or_running()
+            && !self.input_queue.context_input_required
             && !self.input_queue.submissions_paused()
             && !self.input_queue.rate_limit_recovery_pending;
         if action != QueuedInputAction::ParseSlash {
@@ -252,6 +253,7 @@ impl ChatWidget {
     pub(crate) fn maybe_send_next_queued_input(&mut self) -> bool {
         if self.thread_stream_disconnected
             || !self.is_session_configured()
+            || self.input_queue.context_input_required
             || self.fork_in_progress
             || self.has_misalignment_policy_violation()
             || self.input_queue.submissions_paused()

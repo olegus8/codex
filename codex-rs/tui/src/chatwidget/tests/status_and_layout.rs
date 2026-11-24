@@ -400,6 +400,7 @@ async fn context_indicator_shows_used_tokens_when_window_unknown() {
         ..TokenUsage::default()
     };
     let token_info = TokenUsageInfo {
+        context_window_usage: None,
         total_token_usage: token_usage,
         last_token_usage: TokenUsage {
             total_tokens: 40_000,
@@ -4787,6 +4788,7 @@ async fn session_configured_clears_goal_status_footer() {
         read_only_history: false,
         thread_settings_confirmed: true,
         primary_environment_cwd: None,
+        waiting_context_pause: None,
         daybreak_enabled: false,
         windows_sandbox_host: crate::app::WindowsSandboxHost::Local,
         thread_id: ThreadId::new(),

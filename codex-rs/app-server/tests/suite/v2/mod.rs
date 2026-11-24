@@ -48,6 +48,7 @@ mod connection_handling_websocket;
 mod connection_handling_websocket_compression;
 #[cfg(unix)]
 mod connection_handling_websocket_unix;
+mod context_policy;
 #[path = "critical_path_analytics_tests.rs"]
 mod critical_path_analytics;
 #[cfg(unix)]

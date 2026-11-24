@@ -282,6 +282,7 @@ async fn fork_version_stops_before_older_segments_once_resolved() {
         compacted.resume_metadata = Some(codex_rollout::CompactionResumeMetadata {
             next_item_ordinal: None,
             rejected_audio_file_ids: Default::default(),
+            context_pause: None,
             dynamic_tools: None,
             observation_clock_floor_ms: None,
             multi_agent_version: Some(MultiAgentVersion::V2),
@@ -696,6 +697,7 @@ fn turn_started(turn_id: &str) -> RolloutItem {
 
 fn turn_complete(turn_id: &str) -> RolloutItem {
     RolloutItem::EventMsg(EventMsg::TurnComplete(TurnCompleteEvent {
+        context_pause: None,
         root_turn_id: None,
         turn_id: turn_id.to_string(),
         last_agent_message: None,

@@ -305,6 +305,7 @@ fn evicted_voice_delegation_marker_still_suppresses_private_replay() {
 
     let mut resumed = ThreadEventStore::new(/*capacity*/ 1);
     resumed.set_turns(vec![Turn {
+        context_pause: None,
         id: "voice-turn".into(),
         root_turn_id: None,
         items: vec![ThreadItem::untimed(voice_request)],
@@ -347,6 +348,7 @@ fn saved_voice_turn_suppresses_reasoning_without_hiding_typed_reasoning() {
         }],
     };
     let turn = |id: &str, items| Turn {
+        context_pause: None,
         id: id.into(),
         root_turn_id: None,
         items,
@@ -400,6 +402,7 @@ fn snapshot_keeps_typed_output_before_voice_handoff_in_the_same_turn() {
     let private = commentary("private", "Later voice-private commentary");
     let mut store = ThreadEventStore::new(/*capacity*/ 8);
     store.set_turns(vec![Turn {
+        context_pause: None,
         id: "shared".into(),
         root_turn_id: None,
         items: vec![

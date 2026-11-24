@@ -3137,6 +3137,7 @@ async fn check_resume_round_trip(round_trip: ResumeRoundTrip) -> Result<()> {
                     codex_app_server_protocol::TurnStartedNotification {
                         thread_id: target.thread_id.to_string(),
                         turn: running_turn.unwrap_or_else(|| codex_app_server_protocol::Turn {
+                            context_pause: None,
                             id: "turn-with-follow-up".to_string(),
                             root_turn_id: None,
                             items_view: codex_app_server_protocol::TurnItemsView::Full,

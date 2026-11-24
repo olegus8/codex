@@ -370,6 +370,34 @@ async fn backend_banner_fallback_candidates_and_notice_follow_selected_model() {
 }
 
 #[tokio::test]
+async fn fixed_session_model_keeps_usage_limit_on_selected_model() {
+    let (mut chat, _events, _ops) = make_chatwidget_manual(Some("test-model-a")).await;
+    chat.has_chatgpt_account = true;
+    chat.local_settings.model_switching_enabled = false;
+    let template = chat.model_catalog.try_list_models().unwrap()[0].clone();
+    chat.model_catalog = Arc::new(ModelCatalog::new(vec![ModelPreset {
+        model: "test-model-b".into(),
+        show_in_picker: true,
+        ..template
+    }]));
+    let mut response = banner_response(Some("inline"), json!([]));
+    let banner = response.rate_limit_upsell.as_mut().unwrap();
+    banner["blocked_model_slug"] = json!("test-model-a");
+    banner["fallback_model_slugs"] = json!(["test-model-b"]);
+    chat.update_backend_banner(&response);
+
+    assert_eq!(chat.backend_banner_fallback(), None);
+    assert_eq!(chat.current_model(), "test-model-a");
+
+    response.rate_limit_upsell.as_mut().unwrap()["banner_type"] =
+        json!(crate::backend_banners::LUNA_RESERVE_BANNER);
+    chat.update_backend_banner(&response);
+    assert_eq!(chat.backend_banner_fallback(), None);
+    assert!(!chat.waiting_for_luna_reserve());
+    assert!(chat.bottom_pane.no_modal_or_popup_active());
+}
+
+#[tokio::test]
 async fn backend_banner_sparse_updates_preserve_visible_and_dismissed_occurrences() {
     for dismiss in [false, true] {
         let (mut chat, _events, _ops) = make_chatwidget_manual(Some("test-model-a")).await;

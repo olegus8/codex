@@ -110,6 +110,7 @@ impl ChatWidget {
     /// distinguish replayed events from live ones.
     pub(crate) fn replay_thread_turns(&mut self, turns: Vec<Turn>, replay_kind: ReplayKind) {
         self.turn_lifecycle.has_turn_history |= !turns.is_empty();
+        let context_input_required = self.input_queue.context_input_required;
         if !turns.is_empty() || matches!(replay_kind, ReplayKind::ThreadSnapshot) {
             self.bottom_pane.dismiss_composer_sparkle();
         }
@@ -238,6 +239,7 @@ impl ChatWidget {
                     TurnCompletedNotification {
                         thread_id: self.thread_id.map(|id| id.to_string()).unwrap_or_default(),
                         turn: Turn {
+                            context_pause: None,
                             id: turn_id,
                             root_turn_id,
                             items_view: codex_app_server_protocol::TurnItemsView::NotLoaded,
@@ -253,6 +255,7 @@ impl ChatWidget {
                 );
             }
         }
+        self.input_queue.context_input_required = context_input_required;
     }
 
     pub(crate) fn replay_thread_item(

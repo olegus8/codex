@@ -17,6 +17,7 @@ fn payloads(turn: &Turn, items: &[ThreadItem]) -> Vec<(String, ThreadItemPayload
 
 fn turn(id: &str, status: TurnStatus, item_ids: &[&str]) -> Turn {
     Turn {
+        context_pause: None,
         id: id.to_string(),
         root_turn_id: None,
         items: item_ids

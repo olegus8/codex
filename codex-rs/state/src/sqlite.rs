@@ -11,7 +11,9 @@
 )]
 
 use crate::DbTelemetry;
+use crate::migrations::migrate_fork_thread_history;
 use crate::migrations::repair_legacy_recency_migration_version;
+use crate::migrations::repair_legacy_thread_history_migrations;
 use crate::runtime::recovery::RuntimeDbInitError;
 use crate::telemetry;
 use crate::telemetry::DbKind;
@@ -414,6 +416,9 @@ impl SqliteConfig {
             if matches!(spec.kind, DbKind::State) {
                 repair_legacy_recency_migration_version(&pool, migrator).await?;
             }
+            if matches!(spec.kind, DbKind::ThreadHistory) {
+                repair_legacy_thread_history_migrations(&pool, migrator).await?;
+            }
             // SQLx's SQLite migration lock is a no-op. Keep version checks and changes in
             // one transaction, retrying from a fresh snapshot after a concurrent migration.
             // A current schema needs only a read lock, including when opened on NFS.
@@ -428,7 +433,11 @@ impl SqliteConfig {
                 }
                 transaction.commit().await.map_err(anyhow::Error::from)
             })
-            .await
+            .await?;
+            if matches!(spec.kind, DbKind::ThreadHistory) {
+                migrate_fork_thread_history(&pool).await?;
+            }
+            Ok::<_, anyhow::Error>(())
         }
         .await;
         telemetry::record_init_result(
